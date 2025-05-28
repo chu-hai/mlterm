@@ -26,6 +26,10 @@
 #include "version.h"
 #include "daemon.h"
 
+#ifdef USE_SDL2
+#include <SDL2/SDL.h>
+#endif
+
 #if defined(__ANDROID__) || defined(USE_QUARTZ) || (defined(USE_SDL2) && defined(__APPLE__)) || \
   defined(USE_WIN32API)
 /* Shrink unused memory */
@@ -58,6 +62,10 @@ static void sig_fatal(int sig) {
   signal(sig, SIG_DFL);
 
   kill(getpid(), sig);
+
+#ifdef USE_SDL2
+  SDL_Quit();
+#endif
 }
 #endif /* USE_WIN32API */
 
@@ -433,6 +441,27 @@ int main_loop_init(int argc, char **argv) {
     use_aafont = 1;
   }
 #endif
+#endif
+#ifdef USE_SDL2_KMSDRM
+  if ((value = bl_conf_get_value(conf, "kmsdrm_resolution"))) {
+    extern Uint32 kmsdrm_xres;
+    extern Uint32 kmsdrm_yres;
+
+    sscanf(value, "%dx%d", &kmsdrm_xres, &kmsdrm_yres);
+  }
+
+  if ((value = bl_conf_get_value(conf, "kmsdrm_use_software_renderer"))) {
+    extern Uint32 use_software_renderer;
+    u_int n;
+
+    if (!bl_str_to_uint(&n, value)) {
+      bl_msg_printf(invalid_msg, "kmsdrm_use_software_renderer", value);
+    } else {
+      if (n == 1) {
+        use_software_renderer = 1;
+      }
+    }
+  }
 #endif
 
   ui_main_config_init(&main_config, conf, argc, argv);

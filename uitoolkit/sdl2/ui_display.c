@@ -40,6 +40,14 @@
 
 #define DECORATION_MARGIN 0 /* for decorataion */
 
+#ifdef USE_SDL2_KMSDRM
+#if defined(__linux__)
+#include <linux/fb.h>
+#include <fcntl.h>     /* open */
+#include <sys/ioctl.h> /* ioctl */
+#endif
+#endif
+
 /* --- static variables --- */
 
 static u_int num_displays;
@@ -52,6 +60,18 @@ static u_char *cur_preedit_text;
 static SDL_threadID main_tid;
 #ifdef MONITOR_PTY
 static SDL_cond *pty_cond;
+#endif
+#ifdef USE_SDL2_KMSDRM
+static Uint32 fb_xres;
+static Uint32 fb_yres;
+#endif
+
+#ifdef USE_SDL2_KMSDRM
+/* --- global variables --- */
+
+Uint32 kmsdrm_xres = -1;
+Uint32 kmsdrm_yres = -1;
+Uint32 use_software_renderer = 0;
 #endif
 
 /* --- static functions --- */
@@ -372,10 +392,22 @@ static int init_display(Display *display, char *app_name, int x, int y, int hint
       return 0;
     }
 
+#ifdef USE_SDL2_KMSDRM
+    SDL_SetWindowFullscreen(display->window, SDL_WINDOW_FULLSCREEN);
+
+	Uint32 renderer_flags = SDL_RENDERER_PRESENTVSYNC;
+    if (use_software_renderer) {
+		renderer_flags |= SDL_RENDERER_SOFTWARE;
+    } else {
+		renderer_flags |= SDL_RENDERER_ACCELERATED;
+    }
+    if (!(display->renderer = SDL_CreateRenderer(display->window, -1, renderer_flags
+#else
     if (!(display->renderer = SDL_CreateRenderer(display->window, -1,
                                                  SDL_RENDERER_ACCELERATED
 #if 1
                                                  | SDL_RENDERER_PRESENTVSYNC
+#endif
 #endif
                                                  ))) {
       SDL_DestroyWindow(display->window);
@@ -904,6 +936,11 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
   ui_display_t *disp;
   void *p;
   struct rgb_info rgbinfo = {0, 0, 0, 16, 8, 0};
+#ifdef USE_SDL2_KMSDRM
+  int fb_fd;
+  struct fb_var_screeninfo vinfo;
+  char *dev;
+#endif
 
   if (!(disp = calloc(1, sizeof(ui_display_t) + sizeof(Display)))) {
     return NULL;
@@ -927,6 +964,31 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
       return NULL;
     }
+
+#ifdef USE_SDL2_KMSDRM
+    /* Check SDL Video driver */
+    if (strcmp(SDL_GetCurrentVideoDriver(), "KMSDRM") == 0) {
+      /* Set resolution value*/
+      if (kmsdrm_xres == -1 || kmsdrm_yres == -1) {
+        /* Get framebuffer resolution */
+        dev = getenv("FRAMEBUFFER");
+        dev = dev ? dev : "/dev/fb0";
+        fb_fd = open(dev, O_RDWR);
+        if (fb_fd < 0) {
+          bl_error_printf("Couldn't open %s.\n", dev);
+          return 0;
+        }
+        ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
+        close(fb_fd);
+        fb_xres = vinfo.xres;
+        fb_yres = vinfo.yres;
+      }
+      else {
+        fb_xres = kmsdrm_xres;
+        fb_yres = kmsdrm_yres;
+      }
+    }
+#endif
 
     SDL_StartTextInput();
 
@@ -1011,6 +1073,9 @@ int ui_display_fd(ui_display_t *disp) { return -1; }
 int ui_display_show_root(ui_display_t *disp, ui_window_t *root, int x, int y, int hint,
                          char *app_name, char *wm_role, Window parent_window) {
   void *p;
+#ifdef USE_SDL2_KMSDRM
+  int is_kmsdrm_IM = (disp->num_roots > 0) ? 1 : 0;
+#endif
 
   if (disp->num_roots > 0) {
     /* XXX Input Method */
@@ -1049,8 +1114,17 @@ int ui_display_show_root(ui_display_t *disp, ui_window_t *root, int x, int y, in
    */
   disp->roots[disp->num_roots++] = root;
 
+#ifdef USE_SDL2_KMSDRM
+  if (!is_kmsdrm_IM) {
+    disp->width = fb_xres;
+    disp->height = fb_yres;
+  } else {
+#endif
   disp->width = ACTUAL_WIDTH(root);
   disp->height = ACTUAL_HEIGHT(root);
+#ifdef USE_SDL2_KMSDRM
+  }
+#endif
   if (rotate_display) {
     disp->display->width = disp->height;
     disp->display->height = disp->width;
@@ -1065,6 +1139,11 @@ int ui_display_show_root(ui_display_t *disp, ui_window_t *root, int x, int y, in
 
   ui_window_show(root, hint);
 
+#ifdef USE_SDL2_KMSDRM
+  if (!is_kmsdrm_IM) {
+    ui_window_resize_with_margin(disp->roots[0], disp->width, disp->height, NOTIFY_TO_MYSELF);
+  }
+#endif
   return 1;
 }
 

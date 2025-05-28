@@ -146,8 +146,13 @@ fi
 
 MLTERM_FB="mlterm-fb"
 
+if test "$with_gui" = "sdl2-kmsdrm"; then
+	with_gui="sdl2"
+	sdl2_backend="kmsdrm"
+fi
+
 AC_ARG_WITH(gui,
-	[  --with-gui@<:@=ARG@:>@        gui library (xlib|win32|fb|quartz|console|wayland|sdl2|beos)],
+	[  --with-gui@<:@=ARG@:>@        gui library (xlib|win32|fb|quartz|console|wayland|sdl2|sdl2-kmsdrm|beos)],
 	gui=$with_gui)
 if test `echo $gui | grep ,`; then
 	gui_list=`echo $gui | sed 's/,/ /g'`
@@ -584,6 +589,9 @@ elif test "$gui" = "sdl2" ; then
 	fi
 	GUI="sdl2"
 	GUI_CFLAGS="-DUSE_SDL2"
+	if test "$sdl2_backend" = "kmsdrm"; then
+		GUI_CFLAGS="${GUI_CFLAGS} -DUSE_SDL2_KMSDRM"
+	fi
 	AC_SUBST(SDL2_CFLAGS)
 	AC_SUBST(SDL2_LIBS)
 else
