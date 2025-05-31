@@ -728,8 +728,54 @@ static void poll_event(void) {
     xev.xkey.parser = NULL;
     xev.xkey.state = get_mod_state(ev.key.keysym.mod);
 
+#ifdef USE_SDL2_KMSDRM
+    /* Ignore Modkey's (ctrl, shift, alt and GUI) repeats. */
+    if (ev.key.repeat != 0
+    && (ev.key.keysym.sym == SDLK_LCTRL  || ev.key.keysym.sym == SDLK_RCTRL
+    ||  ev.key.keysym.sym == SDLK_LSHIFT || ev.key.keysym.sym == SDLK_RSHIFT
+    ||  ev.key.keysym.sym == SDLK_LALT   || ev.key.keysym.sym == SDLK_RALT
+    ||  ev.key.keysym.sym == SDLK_LGUI   || ev.key.keysym.sym == SDLK_RGUI)) {
+        break;
+    }
+
+    switch (xev.xkey.keycode) {
+    /* Fix [yen] and [backslash] key's keysym. */
+    case SDL_SCANCODE_INTERNATIONAL1:
+    case SDL_SCANCODE_INTERNATIONAL3:
+      xev.xkey.ksym = SDLK_BACKSLASH;
+      break;
+
+    /* Fix [Zenkaku_Hankaku] key's keysym. */
+	case SDL_SCANCODE_GRAVE:
+      xev.xkey.ksym = XK_Zenkaku_Hankaku;
+      break;
+
+    /* Fix [Muhenkan] key's keysym. */
+    case SDL_SCANCODE_INTERNATIONAL5:
+      xev.xkey.ksym = XK_Muhenkan;
+      break;
+
+    /* Fix [Henkan] key's keysym. */
+    case SDL_SCANCODE_INTERNATIONAL4:
+      xev.xkey.ksym = XK_Henkan_Mode;
+      break;
+
+    /* Fix [Hiragana_Katakana] key's keysym. */
+    case SDL_SCANCODE_INTERNATIONAL2:
+      xev.xkey.ksym = XK_Hiragana_Katakana;
+      break;
+    }
+#endif
+
     if (!cur_preedit_text &&
         (xev.xkey.ksym < 0x20 || xev.xkey.ksym >= 0x7f || (xev.xkey.state & ControlMask) ||
+#ifdef USE_SDL2_KMSDRM
+        (xev.xkey.ksym == XK_Zenkaku_Hankaku) ||
+        (xev.xkey.ksym == XK_Muhenkan) ||
+        (xev.xkey.ksym == XK_Henkan_Mode) ||
+        (xev.xkey.ksym == XK_Hiragana_Katakana) ||
+        (xev.xkey.state & Mod1Mask) ||
+#endif
          (xev.xkey.state & CommandMask))) {
       ui_window_receive_event(get_display(ev.key.windowID)->roots[0], &xev);
     }
@@ -738,6 +784,11 @@ static void poll_event(void) {
 
   case SDL_TEXTINPUT:
     {
+#ifdef USE_SDL2_KMSDRM
+      if ((SDL_GetModState() & (KMOD_CTRL | KMOD_ALT)) != 0) {
+        break;
+      }
+#endif
       ui_window_t *win = get_display(ev.text.windowID)->roots[0];
 
       update_ime_text(win, "");
