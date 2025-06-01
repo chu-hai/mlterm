@@ -162,6 +162,7 @@ static ui_window_t *search_inputtable_window(ui_window_t *candidate, ui_window_t
   return candidate;
 }
 
+#ifndef USE_SDL2_KMSDRM
 static void update_ime_text(ui_window_t *uiwindow, const char *preedit_text) {
   if (!(uiwindow = search_focused_window(uiwindow)) || !uiwindow->inputtable) {
     return;
@@ -177,6 +178,7 @@ static void update_ime_text(ui_window_t *uiwindow, const char *preedit_text) {
     cur_preedit_text = strdup(preedit_text);
   }
 }
+#endif
 
 /*
  * x and y are rotated values.
@@ -358,9 +360,15 @@ static void close_display(ui_display_t *disp) {
   }
 #endif
 
+#ifdef USE_SDL2_KMSDRM
+  if (num_displays == 0) {
+#endif
   SDL_DestroyTexture(disp->display->texture);
   SDL_DestroyRenderer(disp->display->renderer);
   SDL_DestroyWindow(disp->display->window);
+#ifdef USE_SDL2_KMSDRM
+  }
+#endif
 
   ui_picture_display_closed(disp->display);
 
@@ -369,22 +377,35 @@ static void close_display(ui_display_t *disp) {
 
 static int init_display(Display *display, char *app_name, int x, int y, int hint) {
   SDL_Rect rect;
+#ifdef USE_SDL2_KMSDRM
+  int is_kmsdrm_IM = (display->parent) ? 1 : 0;
+#endif
 
   if (!display->window) {
     Uint32 flag;
 
     if (display->parent) {
       /* XXX Input Method */
+#ifdef USE_SDL2_KMSDRM
+      display->window   = (display->parent)->display->window;
+      display->renderer = (display->parent)->display->renderer;
+      display->x_pos = x;
+      display->y_pos = y;
+#else
 #if SDL_VERSION_ATLEAST(2, 0, 5)
       flag = SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE |
              SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_SKIP_TASKBAR | SDL_WINDOW_UTILITY;
 #else
       flag = SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE;
 #endif
+#endif	/* USE_SDL2_KMSDRM */
     } else {
       flag = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_INPUT_FOCUS;
     }
 
+#ifdef USE_SDL2_KMSDRM
+    if (!is_kmsdrm_IM) {
+#endif
     if (!(display->window = SDL_CreateWindow(app_name,
                                              (hint & XValue) ? x : SDL_WINDOWPOS_CENTERED,
                                              (hint & YValue) ? y : SDL_WINDOWPOS_CENTERED,
@@ -450,13 +471,19 @@ static int init_display(Display *display, char *app_name, int x, int y, int hint
 
   next_step:
     SDL_SetRenderDrawColor(display->renderer, 0xff, 0xff, 0xff, 0xff);
+#ifndef USE_SDL2_KMSDRM
   }
+#endif
 
   rect.x = 0;
   rect.y = 0;
   rect.w = display->width;
   rect.h = display->height;
   SDL_RenderSetViewport(display->renderer, &rect);
+#ifdef USE_SDL2_KMSDRM
+  }
+  }
+#endif
 
   if (display->texture) {
     SDL_DestroyTexture(display->texture);
@@ -551,6 +578,9 @@ static ui_display_t *get_display(Uint32 window_id) {
 
 static void present_displays(void) {
   u_int count;
+#ifdef USE_SDL2_KMSDRM
+  int do_render_present = 0;
+#endif
 
   for (count = 0; count < num_displays; count++) {
     Display *display = displays[count]->display;
@@ -576,7 +606,24 @@ static void present_displays(void) {
 #endif
 
 #if 1
+#ifdef USE_SDL2_KMSDRM
+      if (!display->parent) {
+#endif
       SDL_RenderCopy(display->renderer, display->texture, NULL, NULL);
+#ifdef USE_SDL2_KMSDRM
+      } else {
+        SDL_Rect src, dest;
+        src.x = 0;
+        src.y = 0;
+        src.w = display->width;
+        src.h = display->height;
+        dest.x = display->x_pos;
+        dest.y = display->y_pos;
+        dest.w = display->width;
+        dest.h = display->height;
+        SDL_RenderCopy(display->renderer, display->texture, &src, &dest);
+      }
+#endif
 #else
       SDL_RenderCopyEx(display->renderer, display->texture, NULL, NULL, 20.0, NULL, SDL_FLIP_NONE);
 #endif
@@ -585,7 +632,11 @@ static void present_displays(void) {
       msec[2] = SDL_GetTicks();
 #endif
 
+#ifdef USE_SDL2_KMSDRM
+      do_render_present = 1;
+#else
       SDL_RenderPresent(display->renderer);
+#endif
       next_vsync_msec = SDL_GetTicks() + vsync_interval_msec;
 
 #ifdef MEASURE_TIME
@@ -603,6 +654,11 @@ static void present_displays(void) {
       display->damaged = 0;
     }
   }
+#ifdef USE_SDL2_KMSDRM
+  if (do_render_present == 1) {
+    SDL_RenderPresent(displays[0]->display->renderer);
+  }
+#endif
 }
 
 static void receive_mouse_event(ui_display_t *disp, XButtonEvent *xev) {
@@ -791,7 +847,9 @@ static void poll_event(void) {
 #endif
       ui_window_t *win = get_display(ev.text.windowID)->roots[0];
 
+#ifndef USE_SDL2_KMSDRM
       update_ime_text(win, "");
+#endif
 
       xev.xkey.type = KeyPress;
       xev.xkey.time = ev.text.timestamp;
@@ -814,6 +872,7 @@ static void poll_event(void) {
 
     break;
 
+#ifndef USE_SDL2_KMSDRM
   case SDL_TEXTEDITING:
     if (strlen(ev.edit.text) > 0) {
       update_ime_text(get_display(ev.edit.windowID)->roots[0], ev.edit.text);
@@ -822,6 +881,7 @@ static void poll_event(void) {
     bl_debug_printf("SDL_TEXTEDITING event: %s(%x...)\n", ev.edit.text, ev.edit.text[0]);
 #endif
     break;
+#endif
 
   case SDL_MOUSEBUTTONDOWN:
   case SDL_MOUSEBUTTONUP:
@@ -1301,7 +1361,34 @@ int ui_display_resize(ui_display_t *disp, u_int width, u_int height) {
     }
 
     disp->display->resizing = 1;
+#ifdef USE_SDL2_KMSDRM
+    if (!disp->display->parent) {
+      SDL_SetWindowSize(disp->display->window, width, height);
+    } else {
+      /* copy from SDL_WINDOWEVENT */
+      if (width != disp->display->width || height != disp->display->height) {
+        disp->display->width = width;
+        disp->display->height = height;
+
+        if (rotate_display) {
+          disp->width = height;
+          disp->height = width;
+        } else {
+          disp->width = width;
+          disp->height = height;
+        }
+
+        init_display(disp->display, NULL, 0, 0, 0);
+        disp->display->resizing = 0;
+        ui_window_resize_with_margin(disp->roots[0], disp->width, disp->height, NOTIFY_TO_MYSELF);
+
+        /* This is because ui_window_resize_with_margin() redraws screen partially. */
+        ui_window_update_all(disp->roots[0]);
+      }
+    }
+#else
     SDL_SetWindowSize(disp->display->window, width, height);
+#endif
 
     return 1;
   } else {
@@ -1310,7 +1397,12 @@ int ui_display_resize(ui_display_t *disp, u_int width, u_int height) {
 }
 
 int ui_display_move(ui_display_t *disp, int x, int y) {
+#ifdef USE_SDL2_KMSDRM
+  disp->display->x_pos = x;
+  disp->display->y_pos = y;
+#else
   SDL_SetWindowPosition(disp->display->window, x, y);
+#endif
 
   return 1;
 }

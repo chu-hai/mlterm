@@ -607,6 +607,9 @@ static void destroy(ui_im_candidate_screen_t *cand_screen) {
 
 static void show(ui_im_candidate_screen_t *cand_screen) {
   ui_window_map(&cand_screen->window);
+#ifdef USE_SDL2_KMSDRM
+  cand_screen->window.disp->display->damaged = 1;
+#endif
 }
 
 static void hide(ui_im_candidate_screen_t *cand_screen) {

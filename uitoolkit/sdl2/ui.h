@@ -83,6 +83,11 @@ typedef struct {
   unsigned int width;
   unsigned int height;
 
+#ifdef USE_SDL2_KMSDRM
+  unsigned int x_pos;
+  unsigned int y_pos;
+#endif
+
   int damaged;
   int resizing;
 
@@ -424,7 +429,11 @@ KeySym XStringToKeysym(const char *str);
 #endif
 #define NO_DISPLAY_FD
 #undef FLICK_SCROLL
+#ifdef USE_SDL2_KMSDRM
+#undef UIWINDOW_SUPPORTS_PREEDITING
+#else
 #define UIWINDOW_SUPPORTS_PREEDITING
+#endif
 #define SELECTION_STYLE_CHANGEABLE
 
 #endif
