@@ -586,6 +586,16 @@ static void present_displays(void) {
     Display *display = displays[count]->display;
 
     if (display->damaged) {
+#ifdef USE_SDL2_KMSDRM
+      if (!display->parent) {
+        ui_display_t *chk_parent = displays[count];
+        for (int index = 0; index < num_displays; index++) {
+          if (displays[index]->display->parent == chk_parent) {
+            displays[index]->display->damaged = 1;
+          }
+        }
+      }
+#endif
 #ifdef MEASURE_TIME
       Uint32 msec[5];
       Uint32 old_next_vsync_msec = next_vsync_msec;
@@ -772,7 +782,7 @@ static void poll_event(void) {
         }
       }
     }
-    
+
     break;
 
   case SDL_KEYDOWN:
@@ -906,7 +916,7 @@ static void poll_event(void) {
     xev.xbutton.y = ev.button.y;
 
     receive_mouse_event(disp, &xev.xbutton);
- 
+
     break;
 
   case SDL_MOUSEWHEEL:
