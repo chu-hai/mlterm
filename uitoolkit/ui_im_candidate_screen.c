@@ -333,9 +333,13 @@ static void draw_screen_vertical(ui_im_candidate_screen_t *cand_screen, u_int to
              font->width * (num_digits + 1), i - top, font->height, font->ascent, 1);
   }
 
+#ifdef USE_SDL2_KMSDRM
+  if (draw_index == INVALID_INDEX) {
+#else
   if (draw_index != INVALID_INDEX) {
     return;
   }
+#endif
 
   /*
    * |7 cand6         |
@@ -354,6 +358,9 @@ static void draw_screen_vertical(ui_im_candidate_screen_t *cand_screen, u_int to
     ui_window_clear(&cand_screen->window, 0, y, win_width, win_height - y - 1);
   }
 
+#ifdef USE_SDL2_KMSDRM
+  }
+#endif
   /*
    * |8  cand7     |
    * |9  cand8     |
