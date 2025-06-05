@@ -1104,6 +1104,11 @@ static int xcore_draw_str(ui_window_t *window, ui_font_manager_t *font_man,
         }
       }
 
+#ifdef USE_SDL2_KMSDRM
+      if (fg_color == VT_BG_COLOR && vt_char_is_blinking(&chars[count - 1]) != 0) {
+        ui_window_clear(window, x, y, current_width - x, height);
+      } else
+#endif
       if (state == 2) {
         ui_window_draw_image_string16(window, uifont, fg_xcolor, bg_xcolor, x, y + ascent, str2b,
                                       str_len);
