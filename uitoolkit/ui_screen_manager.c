@@ -1361,7 +1361,7 @@ int ui_screen_manager_init(char *_mlterm_version, u_int _depth, u_int _max_scree
 #else
   system_listener.exit = NULL;
 #endif
-#ifdef MANAGE_ROOT_WINDOWS_BY_MYSELF
+#if defined(MANAGE_ROOT_WINDOWS_BY_MYSELF) || defined(USE_SDL2_KMSDRM)
   system_listener.open_screen = NULL;
 #else
   system_listener.open_screen = open_screen;

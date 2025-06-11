@@ -1373,7 +1373,7 @@ int ui_display_resize(ui_display_t *disp, u_int width, u_int height) {
     disp->display->resizing = 1;
 #ifdef USE_SDL2_KMSDRM
     if (!disp->display->parent) {
-      SDL_SetWindowSize(disp->display->window, width, height);
+      SDL_SetWindowSize(disp->display->window, disp->display->width, disp->display->height);
     } else {
       /* copy from SDL_WINDOWEVENT */
       if (width != disp->display->width || height != disp->display->height) {
