@@ -1034,11 +1034,13 @@ static void poll_event(void) {
       break;
     }
 
+#ifndef USE_SDL2_KMSDRM
   case SDL_CLIPBOARDUPDATE:
     disp = get_display(ev.window.windowID);
     if (disp->selection_owner) {
       ui_display_clear_selection(NULL, disp->selection_owner);
     }
+#endif
 
   default:
     if (ev.type == pty_event_type) {
