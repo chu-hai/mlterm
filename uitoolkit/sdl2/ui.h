@@ -286,7 +286,11 @@ enum {
 #define XK_Print SDLK_PRINTSCREEN
 #define XK_Execute SDLK_EXECUTE
 #define XK_Insert SDLK_INSERT
+#ifdef USE_SDL2_KMSDRM
+#define XK_Delete SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_DELETE)
+#else
 #define XK_Delete SDLK_DELETE
+#endif
 #define XK_Help SDLK_HELP
 #define XK_F1 SDLK_F1
 #define XK_F2 SDLK_F2

@@ -830,6 +830,11 @@ static void poll_event(void) {
     case SDL_SCANCODE_INTERNATIONAL2:
       xev.xkey.ksym = XK_Hiragana_Katakana;
       break;
+
+    /* Fix [Delete] key's keysym. */
+    case SDL_SCANCODE_DELETE:
+      xev.xkey.ksym = XK_Delete;
+      break;
     }
 #endif
 
