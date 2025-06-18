@@ -2930,7 +2930,13 @@ static void key_pressed(ui_window_t *win, XKeyEvent *event) {
     if (screen->mod_meta_mask & event->state) {
       /* XXX Fix to check if kstr is ASCII (mod_meta_mode should work only for ASCII chars) */
       if (screen->mod_meta_mode == MOD_META_OUTPUT_ESC) {
+#ifdef USE_SDL2_KMSDRM
+        if (spkey == -1) {
+#endif
         write_to_pty(screen, mod_meta_prefix, strlen(mod_meta_prefix), NULL);
+#ifdef USE_SDL2_KMSDRM
+}
+#endif
       } else if (screen->mod_meta_mode == MOD_META_SET_MSB) {
         size_t count;
 
