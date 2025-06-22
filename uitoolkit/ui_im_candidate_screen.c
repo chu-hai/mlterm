@@ -375,7 +375,7 @@ static void draw_screen_vertical(ui_im_candidate_screen_t *cand_screen, u_int to
     size_t len;
     int x;
 
-#ifdef MANAGE_ROOT_WINDOWS_BY_MYSELF
+#if defined(MANAGE_ROOT_WINDOWS_BY_MYSELF) || defined(USE_SDL2_KMSDRM)
     ui_window_clear(&cand_screen->window, 0,
                     (font->height + LINE_SPACE) * cand_screen->num_per_window + LINE_SPACE,
                     win_width, font->height);
