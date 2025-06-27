@@ -958,6 +958,7 @@ static void poll_event(void) {
     if (ev.motion.state & SDL_BUTTON_RMASK) {
       xev.xmotion.state |= Button3Mask;
     }
+    xev.xmotion.state |= get_mod_state(SDL_GetModState());
 
     xev.xmotion.x = ev.motion.x;
     xev.xmotion.y = ev.motion.y;
