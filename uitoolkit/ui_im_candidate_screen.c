@@ -298,6 +298,7 @@ static void draw_screen_vertical(ui_im_candidate_screen_t *cand_screen, u_int to
      * |1 cand0   |
      *  ^^
      */
+#ifndef USE_SDL2_KMSDRM
     if (cand_screen->candidates[i].info) {
       char byte2;
 
@@ -311,6 +312,9 @@ static void draw_screen_vertical(ui_im_candidate_screen_t *cand_screen, u_int to
     } else {
       bl_snprintf(digit, MAX_NUM_OF_DIGITS + 1, "%i    ", i - top + 1);
     }
+#else
+      bl_snprintf(digit, MAX_NUM_OF_DIGITS + 1, "%i    ", (i - top + 1) > 9 ? 0 : i - top + 1);
+#endif
 
     p = digit_str;
     for (j = 0; j < num_digits + 1; j++) {
