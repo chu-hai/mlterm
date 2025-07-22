@@ -432,7 +432,7 @@ KeySym XStringToKeysym(const char *str);
 #undef USE_REAL_VERTICAL_FONT
 #endif
 #define NO_DISPLAY_FD
-#undef FLICK_SCROLL
+#define FLICK_SCROLL
 #ifdef USE_SDL2_KMSDRM
 #undef UIWINDOW_SUPPORTS_PREEDITING
 #else
