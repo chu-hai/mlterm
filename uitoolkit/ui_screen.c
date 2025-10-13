@@ -2281,7 +2281,8 @@ static int shortcut_str(ui_screen_t *screen, KeySym ksym, u_int state, int x, in
     }
   }
   /* XXX Hack for libvte */
-  else if (IS_LIBVTE(screen) && ksym == 0 && state == Button3Mask && strcmp(str, "none") == 0) {
+  else if (IS_LIBVTE(screen) && ksym == 0 &&
+           (state & ~Mod2Mask /* XXX NumLock */) == Button3Mask && strcmp(str, "none") == 0) {
     /* do nothing */
   } else {
     write_to_pty(screen, str, strlen(str), NULL);
@@ -2577,18 +2578,18 @@ static void copymode_key(ui_screen_t *screen, int ksym, u_int state, u_char *str
     } else if (ksym == XK_Return || ksym == ' ') {
       ui_stop_selecting(&screen->sel);
     } else if (ksym == XK_Escape || ksym == 'q') {
-    copymode_end:
-      ui_sel_clear(&screen->sel);
-      ui_copymode_destroy(screen->copymode);
-      screen->copymode = NULL;
-      if (exit_backscroll_mode(screen)) {
-        /* ui_window_update() is called in exit_backscroll_mode(). */
-        return;
+      if (ui_sel_is_reversed(&screen->sel)) {
+        ui_restore_selected_region_color(&screen->sel);
+      } else {
+      copymode_end:
+        ui_sel_clear(&screen->sel);
+        ui_copymode_destroy(screen->copymode);
+        screen->copymode = NULL;
+        if (exit_backscroll_mode(screen)) {
+          /* ui_window_update() is called in exit_backscroll_mode(). */
+          return;
+        }
       }
-    } else {
-#if 0
-      ui_sel_clear(&screen->sel);
-#endif
     }
   }
 

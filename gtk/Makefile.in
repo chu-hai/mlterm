@@ -23,16 +23,19 @@ PKG_NAME = $(PKG_NAME_$(VTE_ABI))
 PKG_NAME_ = vte
 PKG_NAME_2.90 = vte-2.90
 PKG_NAME_2.91 = vte-2.91
+PKG_NAME_2.91-gtk4 = vte-2.91-gtk4
 
 LIB_VERSION = $(LIB_VERSION_$(VTE_ABI))
 LIB_VERSION_ = 9:0:0
 LIB_VERSION_2.90 = 9:0:0
 LIB_VERSION_2.91 = 0:0:0
+LIB_VERSION_2.91-gtk4 = 0:0:0
 
 TARGET = $(TARGET_$(VTE_ABI))
 TARGET_ = libvte
 TARGET_2.90 = libvte2_90
 TARGET_2.91 = libvte-2.91
+TARGET_2.91-gtk4 = libvte-2.91-gtk4
 
 LPOBL = @LPOBL@
 LMEF = @LMEF@
@@ -41,11 +44,15 @@ CFLAGS = $(CFLAGS_LOCAL) @POBL_CFLAGS@ @MEF_CFLAGS@ @TYPE_CFLAGS@ @DEB_CFLAGS@ \
 	@TRUECOLOR_CFLAGS@ @SSH2_CFLAGS@ @GUI_CFLAGS@ @FT_CFLAGS@ \
 	-DSYSCONFDIR=\"$(sysconfdir)\" `$(PKG_CONFIG) --cflags $(PKG_NAME)` \
 	@BRLAPI_CFLAGS@ @CFLAGS@ @CPPFLAGS@
-LIBS = $(LPOBL) $(LMEF) @IMAGELIB_LIBS@ @DL_LIBS_IM@ @GTK_LIBS@ \
+LIBS = $(LPOBL) $(LMEF) @IMAGELIB_LIBS@ @DL_LIBS_IM@ $(LIBS_GTK) \
 	@CTL_LIBS_FOR_VTE@ @TYPE_LIBS_FOR_VTE@ @SSH2_LIBS_FOR_VTE@ @BRLAPI_LIBS@ \
 	@REGEX_LIBS@ @DEXPORT@
+LIBS_wayland = @WAYLAND_LIBS@
+LIBS_GTK = @GTK_LIBS@
+LIBS_GTK3 = `$(PKG_CONFIG) --libs gtk+-3.0` $(LIBS_@GUI@)
+LIBS_GTK4 = `$(PKG_CONFIG) --libs gtk4` $(LIBS_@GUI@)
 
-LIBTOOL_CC = $(LIBTOOL) --mode=compile $(CC) $(CFLAGS)
+LIBTOOL_CC = $(LIBTOOL) --mode=compile $(CC)
 LIBTOOL_LINK = $(LIBTOOL) --mode=link $(CC) @LDFLAGS@
 LIBTOOL_INSTALL = $(LIBTOOL) --mode=install $(INSTALL)
 
@@ -82,10 +89,10 @@ vte.o: vte.c vte_@GUI@.c
 		-I$(top_builddir)/uitoolkit -I../encodefilter/include -I../baselib/include -c $<
 
 clean:
-	rm -rf $(OBJ) $(OBJ:.o=.lo) $(TARGET).* *.core .libs
+	rm -rf $(OBJ) $(OBJ:.o=.lo) *.la *.core .libs
 
 distclean: clean
-	rm -f Makefile
+	rm -f Makefile Makefile.gtk4
 
 install: $(LIBDIR)
 	$(LIBTOOL_INSTALL) $(TARGET).la $(LIBDIR)
@@ -95,3 +102,17 @@ $(LIBDIR):
 
 uninstall:
 	rm -f $(LIBDIR)/$(TARGET).*
+
+gtk4:
+	cat Makefile | sed 's/VTE_ABI =.*/VTE_ABI = 2.91-gtk4/' |  sed 's/(LIBS_GTK)/(LIBS_GTK4)/' > Makefile.gtk4
+	make -f Makefile.gtk4
+
+install-gtk4:
+	make install -f Makefile.gtk4
+
+gtk3:
+	cat Makefile | sed 's/VTE_ABI =.*/VTE_ABI = 2.91/' |  sed 's/(LIBS_GTK)/(LIBS_GTK3)/' > Makefile.gtk3
+	make -f Makefile.gtk3
+
+install-gtk3:
+	make install -f Makefile.gtk3
