@@ -60,14 +60,11 @@ char *vt_drcs_get_glyph(ef_charset_t cs, u_char idx) {
 }
 
 vt_drcs_font_t *vt_drcs_get_font(vt_drcs_t *drcs, ef_charset_t cs, int create) {
-  if (!drcs) {
+  if (!drcs || !IS_DRCS(cs)) {
     return NULL;
   }
 
-  /* CS94SB(0x30)-CS94SB(0x7e) (=0x00-0x4e), CS96SB(0x30)-CS96SB(0x7e) (0x50-0x9e) */
-  if (cs > CS96SB_ID(0x7e)) {
-    return NULL;
-  }
+  cs = DRCS_TO_CS(cs);
 
   if (!drcs->fonts[cs]) {
     if (!create || !(drcs->fonts[cs] = calloc(1, sizeof(vt_drcs_font_t)))) {
@@ -150,7 +147,7 @@ int vt_drcs_get_picture(vt_drcs_font_t *font, int *id, int *pos, u_int ch) {
 }
 
 int vt_convert_drcs_to_unicode_pua(ef_char_t *ch) {
-  if (vt_drcs_get_glyph(ch->cs, ch->ch[0])) {
+  if (IS_DRCS(ch->cs)) {
     if (IS_CS94SB(ch->cs)) {
       ch->ch[2] = CS94SB_FT(ch->cs);
       ch->ch[3] = ch->ch[0] & 0x7f;
@@ -177,9 +174,9 @@ int vt_convert_unicode_pua_to_drcs(ef_char_t *ch) {
 
   if (c[1] == 0x10 && 0x30 <= c[2] && c[2] <= 0x7e && c[0] == 0x00) {
     if (0x20 <= c[3] && c[3] <= 0x7f) {
-      ch->cs = CS94SB_ID(c[2]);
+      ch->cs = CS_TO_DRCS(CS94SB_ID(c[2]));
     } else if (0xa0 <= c[3] && c[3] <= 0xff) {
-      ch->cs = CS96SB_ID(c[2]);
+      ch->cs = CS_TO_DRCS(CS96SB_ID(c[2]));
     } else {
       return 0;
     }

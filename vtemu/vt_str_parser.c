@@ -9,6 +9,11 @@
 #include "vt_char_encoding.h" /* vt_is_msb_set */
 #include "vt_drcs.h"
 
+/* sizeof(ef_parser_t::left) >= 4 */
+#define LEFT_WITH_COMB_LEFT(left, comb_left) ((left) + ((comb_left) << 24))
+#define LEFT(left_with_comb) ((left_with_comb) & 0xfff)
+#define COMB_LEFT(left_with_comb) (((left_with_comb) >> 24) & 0xf)
+
 typedef struct vt_str_parser {
   ef_parser_t parser;
 
@@ -28,12 +33,14 @@ static int next_char(ef_parser_t *parser, ef_char_t *ch) {
   vt_str_parser_t *vt_str_parser;
   vt_char_t *vt_ch;
   u_int comb_size;
+  ef_charset_t cs;
 
   vt_str_parser = (vt_str_parser_t*)parser;
 
   /* hack for ef_parser_reset */
-  vt_str_parser->str -= (parser->left - vt_str_parser->left);
-  vt_str_parser->left = parser->left;
+  vt_str_parser->str -= (LEFT(parser->left) - vt_str_parser->left);
+  vt_str_parser->left = LEFT(parser->left);
+  vt_str_parser->comb_left = COMB_LEFT(parser->left);
 
   while (1) {
     if (vt_str_parser->parser.is_eos) {
@@ -86,38 +93,29 @@ static int next_char(ef_parser_t *parser, ef_char_t *ch) {
     }
   }
 
-  ch->cs = vt_char_cs(vt_ch);
+  cs = vt_char_cs(vt_ch);
+  if (IS_DRCS(cs)) {
+    ch->cs = CS_ADD_INTERMEDIATE(DRCS_TO_CS(cs), ' ');
+  } else {
+    ch->cs = cs;
+  }
+
   ch->size = CS_SIZE(ch->cs);
 
   ef_int_to_bytes(ch->ch, ch->size, vt_char_code(vt_ch));
-
-/*
- * Android doesn't support PUA as follows. (tested on Android 4.0)
- *
- * e.g.) UTF8:0x4f88819a (U+10805a)
- * W/dalvikvm( 4527): JNI WARNING: input is not valid Modified UTF-8: illegal
- *start byte 0xf4
- * I/dalvikvm( 4527):   at dalvik.system.NativeStart.run(Native Method)
- * E/dalvikvm( 4527): VM aborting
- */
-#ifndef __ANDROID__
-  if (!vt_convert_drcs_to_unicode_pua(ch))
-#endif
-  {
-    /* XXX */
-    ch->property = 0;
-
-    if (vt_is_msb_set(ch->cs)) {
-      UNSET_MSB(ch->ch[0]);
-    }
+  if (vt_is_msb_set(ch->cs)) {
+    UNSET_MSB(ch->ch[0]);
   }
+
+  /* XXX */
+  ch->property = 0;
 
   if (vt_str_parser->left == 0) {
     vt_str_parser->parser.is_eos = 1;
   }
 
   /* hack for ef_parser_reset */
-  parser->left = vt_str_parser->left;
+  parser->left = LEFT_WITH_COMB_LEFT(vt_str_parser->left, vt_str_parser->comb_left);
 
   if (vt_char_is_null(vt_ch)) {
     return next_char(parser, ch);
@@ -127,7 +125,7 @@ static int next_char(ef_parser_t *parser, ef_char_t *ch) {
 
 err:
   /* hack for ef_parser_reset */
-  parser->left = vt_str_parser->left;
+  parser->left = LEFT_WITH_COMB_LEFT(vt_str_parser->left, vt_str_parser->comb_left);
 
   return 0;
 }

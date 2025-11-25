@@ -1,3 +1,95 @@
+2025-11-24  Araki Ken  <arakiken@users.sf.net>
+
+	* vt_char_encoding.c: Fix illegal memory access in utf8_illegal_char().
+
+2025-11-23  Araki Ken  <arakiken@users.sf.net>
+
+	* ui_screen.c: Draw cursor in a picture with inverted colors.
+
+	* fb/ui_virtual_key.c: Fix arguments of ui_window_copy_area().
+
+	* fb/ui_window.c: Fix compiling error by the previous commit.
+
+2025-11-23  Araki Ken  <arakiken@users.sf.net>
+
+	* ui_draw_str.c:
+	  - get_state() returns pic_glyph with INLINEPIC_REVERSED flag if
+	    vt_char_is_reversed() is true.
+	  - draw_picture() reverses the colors if INLINEPIC_REVERSED flag is set.
+
+	* */ui_window.c, ui_window.h:
+	  Add 'int reverse' to arguments of ui_window_copy_area().
+
+	* beos/ui.h: Define Button1Mask - Button3Mask.
+
+	* beos.cpp, beos.h, cocoa.[hm], cocoatouch.m:
+	  Add 'int reverse' to arguments of view_copy_area().
+
+	* ui_font_manager.c: ui_get_font() returns usascii_font for DRCS.
+
+	* vt_char_encoding.c:
+	  - vt_char_encoding_conv_new() set conv->illegal_char to iso2022_illegal_char
+	    (where vt_convert_unicode_pua_to_drcs() is called) by default if encoding
+	    is based on ISO2022.
+	  - Add iso2022_illegal_char_loose which is used if flag of
+	    vt_char_encoding_conv_set_use_loose_rule() is 1.
+	  - utf8_illegal_char() converts DRCS to unicode pua with the use of
+	    vt_convert_drcs_to_unicode_pua().
+
+	* vt_str_parser.c:
+	  - next_char() converts format of drcs charset from vt_drcs style to
+	    ef_charset style.
+	  - Remove vt_convert_drcs_to_unicode_pua() in next_char().
+
+	* vt_char.[ch]:
+	  - vt_char_combine() doesn't execute normalize() for PICTURE_CHARSET.
+	  - Add vt_char_is_reversed().
+	  - PICTURE_POS_BITS 23 -> 22 for INLINEPIC_REVERSED() bit in ui_draw_str.c
+
+	* ef_iso2022_conv.c: designate_to_g0() processes intermidiate bits of cs.
+
+	* ef_iso2022_parser.c: Fix the commit before the previous one.
+
+2025-10-19  Araki Ken  <arakiken@users.sf.net>
+
+	* vt_str_parser.c: Store vt_str_parser_t::comb_left in
+	  ef_parser_t::left in addition to vt_str_parser_t::left.
+	  (Without this fix, copy&paste some characters with combining
+	  characters can fail.)
+
+	* vt_parser.c: Set DRCS charset and code to a base character
+	  combined by a picture character in put_char() to enable
+	  copy&paste DRCS-Sixel pictures in mlterm.
+
+	* vt_drcs.c: vt_convert_drcs_to_unicode_pua() doesn't check
+	  vt_drcs_get_glyph() but check IS_DRCS(cs) because it is
+	  possible to distinguish DRCS from other charsets by ch->cs
+	  after the previous commit.
+
+2025-10-19  Araki Ken  <arakiken@users.sf.net>
+
+	* vt_parser.c:
+	  - cs with intermediate char -> 0x100 | cs in put_char().
+	  - parse_vt100_escape_sequence() supports "ESC $ )".
+
+	* vt_drcs.c:
+	  - vt_drcs_get_font() regards 0x100 in cs for DRCS flag.
+	  - vt_convert_uniocde_pua_to_drcs() sets 0x100 flag to ch->cs.
+
+	* vt_drcs.h: Add CS_TO_DRCS(), DRCS_TO_CS() and IS_DRCS().
+
+	* encodefilter/src/test.c: Add TEST_iso2022_parser().
+
+	* ef_iso2022_parser.c:
+	  - Add 'int intermed' to arguments of get_charset().
+	  - parse_escape() add an additional intermediate character (' ' for
+	    DRCS) to cs.
+
+	* ef_charset.h:
+	  - CS_REVISION_1(), CS_REVISION_2() -> CS_REVISION_N()
+	  - Add CS_ADD_INTERMIDIATE(), CS_DEL_INTERMEDIATE() and CS_INTERMEDIATE().
+	  - Add IS_CSSB() and IS_CS94_STRICT().
+
 2025-09-28  Araki Ken  <arakiken@users.sf.net>
 
 	* gtk/README: Updated.
