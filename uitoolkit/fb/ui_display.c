@@ -93,10 +93,6 @@
 #define ENABLE_DOUBLE_BUFFER
 #endif
 
-/* Parameters of mouse cursor */
-#define MAX_CURSOR_SHAPE_WIDTH 15
-#define CURSOR_SHAPE_SIZE (7 * 15 * sizeof(u_int32_t))
-
 /*
  * Note that this structure could be casted to Display.
  *
@@ -127,7 +123,7 @@ typedef struct {
 
   } cursor;
 
-  u_char saved_image[CURSOR_SHAPE_SIZE];
+  u_char *saved_image;
   int hidden_region_saved;
 
 } Mouse;
@@ -159,47 +155,152 @@ static int rotate_display = 0;
 
 static struct termios orig_tm;
 
-static const char cursor_shape_normal[] =
-    "#######"
-    "#*****#"
-    "###*###"
-    "  #*#  "
-    "  #*#  "
-    "  #*#  "
-    "  #*#  "
-    "  #*#  "
-    "  #*#  "
-    "  #*#  "
-    "  #*#  "
-    "  #*#  "
-    "###*###"
-    "#*****#"
-    "#######";
-
-static const char cursor_shape_rotate[] =
-    "###         ###"
-    "#*#         #*#"
-    "#*###########*#"
-    "#*************#"
-    "#*###########*#"
-    "#*#         #*#"
-    "###         ###";
-
 static struct cursor_shape {
-  const char *shape;
+  char *shape;
   u_int width;
   u_int height;
   int x_off;
   int y_off;
 
 } cursor_shape = {
-    cursor_shape_normal, 7, /* width */
-    15,                     /* height */
-    -3,                     /* x_off */
-    -7                      /* y_off */
+  NULL,
+  7, /* width */
+  15,/* height */
+  -3,/* x_off */
+  -7 /* y_off */
 };
 
 /* --- static functions --- */
+
+/*
+ * w >= 5
+ * w1 = w / 3
+ * w1_out = (w1 + 1) / 2
+ * w2 = w - w1*2
+ * w2_out = (w2 + 1) / 3
+ * w2_in = w2 - w2_out * 2
+ *
+ * w=5 -> w1=1, w2=3, w2_out=1, w2_in=1
+ *   6 ->    2,    2,        1,       0
+ *   7 ->    2,    3,        1,       1
+ *   8 ->    2,    4,        1,       2
+ *   9 ->    3,    3,        1,       1
+ *  10 ->    3,    4,        1,       2
+ *  11 ->    3,    5,        2,       1
+ *  12 ->    4,    4,        1,       2
+ *  13 ->    4,    5,        2,       1
+ *  14 ->    4,    6,        2,       2
+ *  15 ->    5,    5,        2,       1
+ *
+ * h >= 8
+ * h1 = h / 4
+ * h1_out = (h1 + 1) / 3
+ * h1_in = h1 - h1_out * 2
+ * h2 = h - h1*2
+ *
+ * h=8 -> h1=2, h2=4, h1_out=1, h1_in=0
+ *   9 ->    2,    5,        1,       0
+ *  10 ->    2,    6,        1,       0
+ *  11 ->    2,    7,        1,       0
+ *  12 ->    3,    6,        1,       1
+ *  13 ->    3,    7,        1,       1
+ *  14 ->    3,    8,        1,       1
+ *  15 ->    3,    9,        1,       1
+ *  16 ->    4,    8,        1,       2
+ *
+ * x1x2 x1
+ * ||   ||
+ * #######--
+ * #*****#  h1
+ * ###*###--
+ *   #*#
+ *   #*#
+ *   #*#
+ *   #*#
+ *   #*#    h2
+ *   #*#
+ *   #*#
+ *   #*#
+ *   #*#
+ * ###*###--
+ * #*****#  h1
+ * #######--
+ *
+ */
+static void make_cursor_shape(void) {
+  u_int width;
+  u_int height;
+  int x, y;
+  u_int w1, w1_out, w2, w2_out;
+  u_int h1, h1_out, h1_in;
+  char ch;
+
+  if (cursor_shape.shape == NULL) {
+    if ((cursor_shape.shape = malloc(cursor_shape.width * cursor_shape.height)) == NULL ||
+        (_mouse.saved_image = malloc(cursor_shape.width * cursor_shape.height *
+                                     sizeof(u_int32_t))) == NULL) {
+      exit(1);
+    }
+  }
+
+  if (rotate_display) {
+    width = cursor_shape.height;
+    height = cursor_shape.width;
+  } else {
+    width = cursor_shape.width;
+    height = cursor_shape.height;
+  }
+
+  w1 = width / 3;
+  w1_out = (w1 + 1) / 2;
+  w2 = width - w1 * 2;
+  w2_out = (w2 + 1) / 3;
+
+  h1 = height / 4;
+  h1_out = (h1 + 1) / 3;
+  h1_in = h1 - h1_out * 2;
+
+#ifdef __DEBUG
+  bl_debug_printf("width %d  w1 %d w2 %d w2_out %d w2_in %d\n",
+                  width, w1, w2, w2_out, w2 - w2_out * 2);
+  bl_debug_printf("height %d h1 %d h2 %d h1_out %d h1_in %d\n",
+                  height, h1, height - h1 * 2, h1_out, h1_in);
+#endif
+
+  for (y = 0; y < height; y++) {
+    for (x = 0; x < width; x++) {
+      if (y < h1_out || height - h1_out <= y) {
+        ch = '#';
+      } else if (y < h1_out + h1_in || height - h1_out - h1_in <= y) {
+        if (x < w1_out || width - w1_out <= x) {
+          ch = '#';
+        } else {
+          ch = '*';
+        }
+      } else if (y < h1 || height - h1 <= y) {
+        if (x < w1 + w2_out || width - w1 - w2_out <= x) {
+          ch = '#';
+        } else {
+          ch = '*';
+        }
+      } else {
+        if (w1 + w2_out <= x && x < width - w1 - w2_out) {
+          ch = '*';
+        } else if (w1 <= x && x < width - w1) {
+          ch = '#';
+        } else {
+          ch = ' ';
+        }
+      }
+
+      if (rotate_display) {
+        cursor_shape.shape[x * height + y] = ch;
+      } else {
+        cursor_shape.shape[y * width + x] = ch;
+      }
+    }
+  }
+}
 
 static inline ui_window_t *get_window_intern(ui_window_t *win, int x, int y) {
   u_int count;
@@ -509,9 +610,6 @@ static void put_image_124bpp(int x, int y, u_char *image, size_t size, int write
 static void rotate_mouse_cursor_shape(void) {
   int tmp;
 
-  cursor_shape.shape =
-      (cursor_shape.shape == cursor_shape_normal) ? cursor_shape_rotate : cursor_shape_normal;
-
   tmp = cursor_shape.x_off;
   cursor_shape.x_off = cursor_shape.y_off;
   cursor_shape.y_off = tmp;
@@ -519,6 +617,8 @@ static void rotate_mouse_cursor_shape(void) {
   tmp = cursor_shape.width;
   cursor_shape.width = cursor_shape.height;
   cursor_shape.height = tmp;
+
+  make_cursor_shape();
 }
 
 static void update_mouse_cursor_state(void) {
@@ -653,8 +753,12 @@ static void draw_mouse_cursor_line(int y) {
   u_char *fb;
   ui_window_t *win;
   const char *shape;
-  u_char image[MAX_CURSOR_SHAPE_WIDTH * sizeof(u_int32_t)];
+  u_char *image;
   int x;
+
+  if ((image = alloca(_mouse.cursor.width * sizeof(u_int32_t))) == NULL) {
+    return;
+  }
 
   fb = get_fb(_mouse.cursor.x, _mouse.cursor.y + y);
 
@@ -1339,6 +1443,7 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
 #endif
 
     if (rotate_display) {
+      /* ui_display_rorate() has been already called. */
       u_int tmp;
 
       if (_display.pixels_per_byte > 1) {
@@ -1349,6 +1454,12 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
         _disp.width = _disp.height;
         _disp.height = tmp;
       }
+    } else if (cursor_shape.shape == NULL) {
+      /*
+       * If ui_display_set_cursor_shape() which called make_cursor_shape() was
+       * called, it is not necessary to call make_cursor_shape() here.
+       */
+      make_cursor_shape();
     }
 
     if (!(_disp.name = getenv("DISPLAY"))) {
@@ -1665,6 +1776,32 @@ void ui_display_set_cmap(u_int32_t *pixels, u_int cmap_size) {
 
 #endif
 
+void ui_display_set_cursor_size(u_int width, u_int height) {
+  if (width < 5 || height < 8) {
+    return;
+  }
+
+  if (DISP_IS_INITED) {
+    restore_hidden_region();
+  }
+
+  if (rotate_display) {
+    cursor_shape.width = height;
+    cursor_shape.height = width;
+  } else {
+    cursor_shape.width = width;
+    cursor_shape.height = height;
+  }
+
+  cursor_shape.x_off = -(cursor_shape.width / 2);
+  cursor_shape.y_off = -(cursor_shape.height / 2);
+
+  free(cursor_shape.shape);
+  cursor_shape.shape = NULL; /* to call malloc in make_cursor_shape() */
+  free(_mouse.saved_image);
+  make_cursor_shape();
+}
+
 void ui_display_rotate(int rotate /* 1: clockwise, -1: counterclockwise */
                        ) {
   if (rotate == rotate_display ||
@@ -1680,13 +1817,14 @@ void ui_display_rotate(int rotate /* 1: clockwise, -1: counterclockwise */
   if (rotate_display + rotate != 0) {
     int tmp;
 
+    /* if DISP_IS_INITED == false, _disp.width and _disp.height are both 0 in any case. */
     tmp = _disp.width;
     _disp.width = _disp.height;
     _disp.height = tmp;
 
-    rotate_mouse_cursor_shape();
-
     rotate_display = rotate;
+
+    rotate_mouse_cursor_shape();
 
     if (_disp.num_roots > 0) {
       ui_window_resize_with_margin(_disp.roots[0], _disp.width, _disp.height, NOTIFY_TO_MYSELF);
@@ -2249,3 +2387,63 @@ int ui_cmap_get_pixel_rgb(u_int8_t *red, u_int8_t *green, u_int8_t *blue, u_long
 
   return 1;
 }
+
+#ifdef DEBUG
+#include <assert.h>
+
+static const char cursor_shape_normal[] =
+    "#######"
+    "#*****#"
+    "###*###"
+    "  #*#  "
+    "  #*#  "
+    "  #*#  "
+    "  #*#  "
+    "  #*#  "
+    "  #*#  "
+    "  #*#  "
+    "  #*#  "
+    "  #*#  "
+    "###*###"
+    "#*****#"
+    "#######";
+
+static const char cursor_shape_rotate[] =
+    "###         ###"
+    "#*#         #*#"
+    "#*###########*#"
+    "#*************#"
+    "#*###########*#"
+    "#*#         #*#"
+    "###         ###";
+
+void TEST_ui_display(void) {
+  struct cursor_shape orig_cursor_shape = cursor_shape;
+  int orig_rotate_display = rotate_display;
+
+  if ((cursor_shape.shape = malloc(7 * 15))) {
+    cursor_shape.width = 7;
+    cursor_shape.height = 15;
+    cursor_shape.x_off = -3;
+    cursor_shape.y_off = -7;
+    rotate_display = 0;
+    make_cursor_shape();
+    assert(memcmp(cursor_shape.shape, cursor_shape_normal, 7 * 15) == 0);
+
+    cursor_shape.width = 15;
+    cursor_shape.height = 7;
+    cursor_shape.x_off = -7;
+    cursor_shape.y_off = -3;
+    rotate_display = 1;
+    make_cursor_shape();
+    assert(memcmp(cursor_shape.shape, cursor_shape_rotate, 7 * 15) == 0);
+
+    free(cursor_shape.shape);
+
+    bl_msg_printf("PASS ui_display test.\n");
+  }
+
+  cursor_shape = orig_cursor_shape;
+  rotate_display = orig_rotate_display;
+}
+#endif

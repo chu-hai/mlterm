@@ -18284,6 +18284,8 @@ elif test "$gui" = "quartz" ; then
 	fi
 
 
+	# for mlimgloader
+	X_CFLAGS_AUX="$X_CFLAGS $X_CFLAGS_AUX"
 	X_CFLAGS=""
 	VT_NORM_OBJ="vt_normalize.o"
 	VT_NORM_CFLAGS="-DUSE_NORMALIZE"

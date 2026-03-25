@@ -307,6 +307,9 @@ void ui_prepare_for_main_config(bl_conf_t *conf) {
 #ifdef ROTATABLE_DISPLAY
   bl_conf_add_opt(conf, '\0', "rotate", 0, "rotate_display", "rotate display. [none]");
 #endif
+#ifdef USE_FRAMEBUFFER
+  bl_conf_add_opt(conf, '\0', "crsz", 0, "cursor_size", "cursor size. [7,15]");
+#endif
 #ifdef USE_CONSOLE
   bl_conf_add_opt(conf, '\0', "ckm", 0, "console_encoding", "character encoding of console [none]");
   bl_conf_add_opt(conf, '\0', "csc", 0, "console_sixel_colors",
@@ -1409,6 +1412,17 @@ void ui_main_config_init(ui_main_config_t *main_config, bl_conf_t *conf, int arg
 #ifdef ROTATABLE_DISPLAY
   if ((value = bl_conf_get_value(conf, "rotate_display"))) {
     ui_display_rotate(strcmp(value, "right") == 0 ? 1 : (strcmp(value, "left") == 0 ? -1 : 0));
+  }
+#endif
+
+#ifdef USE_FRAMEBUFFER
+  if ((value = bl_conf_get_value(conf, "cursor_size"))) {
+    u_int width;
+    u_int height;
+
+    if (sscanf(value, "%d,%d", &width, &height) == 2) {
+      ui_display_set_cursor_size(width, height);
+    }
   }
 #endif
 

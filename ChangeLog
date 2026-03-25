@@ -1,3 +1,143 @@
+2026-03-21  Araki Ken <arakiken@users.sf.net>
+
+	* sdl2/ui_display.c, vt_parser.c: When modifyOtherKeys = 1, the usual
+	  shift- and control-modifiers work as expected in windows.
+
+	* sdl2/ui_display.c: Fix dead lock by adding SDL_LockMutex() and
+	  SDL_UnlockMutex() before and after SDL_CondSignal().
+
+2026-02-15  Araki Ken  <arakiken@users.sf.net>
+
+	* ui_display_linux.c: Fix converting EV_ABS to EV_REL.
+
+2026-02-14  Araki Ken  <arakiken@users.sf.net>
+
+	* libvterm/vterm.c: Support DRCSMMv3.
+
+2026-02-12  Araki Ken  <arakiken@users.sf.net>
+
+	* drcssixel-v3.c: Fix carry over not to exceed 0x10ffff.
+
+2026-02-08  Araki Ken  <arakiken@users.sf.net>
+
+	* mlterm.1, README.ja, PROTOCOL: Update.
+
+	* ui_main_config.c: Add --crsz / cursor_size option.
+
+	* ui_screen.c: Add "cursor_size" to ui_screen_set_config().
+
+	* test.c: Add TEST_ui_display().
+
+	* fb/ui_display.c, ui_display.h:
+	  - Add make_cursor_shape() to generate cursor shape information
+	    according to its size dynamically.
+	  - Add ui_display_set_cursor_size().
+
+	* android/jni/ui_display.c: Remove ui_display_rotate().
+
+	* vterm.c: Enclose vterm_state_set_selection_callbacks() by
+	  VERSION_CHECK_VERSION2(0, 2).
+
+2026-02-08  Araki Ken  <arakiken@users.sf.net>
+
+	* vterm.c:
+	  - Check if a member of VTermScreenCallbacks is NULL.
+	  - Fix type cast error in vterm_state_get_cursorpos().
+	  - Add vterm_color_is_equal() and vterm_state_set_selection_callbacks().
+
+	* bl_str.c: bl_str_unescape() supports 0XX (octal digits).
+
+2026-01-25  Araki Ken  <arakiken@users.sf.net>
+
+	* tool/mlimgloader/Makefile.in:
+	  Add LIBS2_quartz_gdk-pixbuf and LIBS2_quartz_libpng.
+
+	* configure.in: Add X_CFLAGS to X_CFLAGS_AUX before X_CFLAGS="" for
+	  mlimagloader to be build with xlib in quartz.
+	  (mlimgloader is not build in quartz, but if multiple values including
+	   "quartz" is specified to --with-gui option, mlimgloader is build
+	   by gui_for_tool="xlib".)
+	  (https://github.com/arakiken/mlterm/issues/157)
+
+2025-12-31  Araki Ken  <arakiken@users.sf.net>
+
+	* xlib/ui_connect_dialog.c: Fix how elapsed time is calculated with
+	  gettimeofday().
+
+2025-12-31  Araki Ken  <arakiken@users.sf.net>
+
+	* ci.yml: macos-13 -> macos-14
+
+	* xlib/ui_connect_dialog.c: The event loop is not terminated until 1
+	  sec has elapsed.
+
+	* c_pixel.c: Fix illegal memory access in TEST_sixel_realloc_pixels().
+
+	* vt_parser.c: Fix parsing iso2022 in parse_vt100_escape_sequence().
+
+2025-12-30  Araki Ken  <arakiken@users.sf.net>
+
+	* vt_parser.h: Reorder the members of vt_parser_t.
+
+2025-12-30  Araki Ken  <arakiken@users.sf.net>
+
+	* drcssixel-v3.c, test-v3, DRCS-SIXEL-v3: Add.
+
+	* vt_line.h, vt_ot_layout.h, vt_parser.h: int -> u_int
+
+	* vt_parser.c:
+	  - Add DECSET 8801.
+	  - define_drcs_picture() supports DRCSMMv3.
+
+	* vt_drcs.[ch]:
+	  - Add vt_drcs_set_version().
+	  - Support DRCSMMv3.
+
+	* vt_str_parser.c: next_char() supports DRCSMMv3.
+
+	* vt_char_encoding.c: Use CS_INTERMEDIATE2() and CS_ADD_INTERMEDIATE2()
+	  in *_illegal_char().
+
+	* encodefilter/src/test.c: Add "\x1b( /@a" to test.
+
+	* ef_iso2022_parser.c:
+	  'int intermed' -> 'int intermed1, int intermed2' in get_charset().
+
+	* ef_iso2022_conv.c: designate_to_g0() processes not only
+	  CS_INTERMEDIATE1() but also CS_INTERMEDIATE2().
+
+	* ef_charset.h:
+	  - Add CS_ADD_INTERMEDIATE2() and CS_INTERMEDIATE2().
+	  - CS_ADD_INTERMEDIATE() -> CS_ADD_INTERMEDIATE1()
+	  - Modify IS_CS94_STRICT() and CS_DEL_INTERMEDIATE().
+
+	* ef_char.h: Change the size of ef_char_t::cs from 16 to 24 bits to
+	  store intermediate character information.
+
+	* encodefilter/src/Makefile.in: 3.1 -> 4.0
+
+2025-12-06  Araki Ken  <arakiken@users.sf.net>
+
+	* vt_parser.c: Fix carry calculation error after 0x107e7f or 0x107eff
+	  in define_drcs_picture().
+	  (This bug was introduced in d810b3d0ed47906c0119202e6dda77178cee6192)
+	  (https://github.com/arakiken/mlterm/issues/151#issuecomment-3602933164)
+
+2025-11-30  Araki Ken  <arakiken@users.sf.net>
+
+	* vt_term.c: Add TEST_decdmac_decinvm() which tests DECDMAC and DECINVM.
+
+	* vt_parser.c:
+	  - Ignore recursive DECINVM.
+	  - Support Pen=2 extension of DECDMAC.
+	    (https://github.com/kmiya-culti/RLogin/issues/151)
+
+	* vt_logical_visual.c: comb_render() calls comb_visual() to enable
+	  render of other vt_logical_visual.
+	  (https://github.com/arakiken/mlterm/issues/152)
+
+	* vt_term.c, test.c: Add TEST_vt_term().
+
 2025-11-24  Araki Ken  <arakiken@users.sf.net>
 
 	* vt_char_encoding.c: Fix illegal memory access in utf8_illegal_char().

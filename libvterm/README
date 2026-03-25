@@ -4,7 +4,7 @@ How to build & install libvterm compatible library using mlterm engine.
 
 * Requirements
   o libvterm library and headers
-  o neovim and other applications using libvterm.
+  o emacs-libvterm and other applications using libvterm.
 
 * Build
   $ ./configure
@@ -18,8 +18,9 @@ How to build & install libvterm compatible library using mlterm engine.
   $ ln -sf [where libvterm of mlterm is installed]/libvterm.so.0 \
            [where official libvterm is installed]/libvterm.so.0
 
-* Start neovim terminal using libvterm
-  $ nvim => :terminal
+* Start emacs vterm using libvterm
+  $ emacs
+  -> Type "M-x vterm".
 
 * Notice
   o Sixel graphics is available under these conditions.
@@ -29,6 +30,13 @@ How to build & install libvterm compatible library using mlterm engine.
     - (mlterm) "col_size_of_width_a" option should be 1.
     - Applications using libvterm should regard the column width of ambiguous
       width characters as 1. (e.g. "set ambiwidth=single" on vim)
+
+  o Set the environmental variable DRCS_SIXEL_VERSION to 2 if you start
+    applications using libvterm in mlterm <= 3.9.4 or RLogin <= 2.31.1.
+
+  o In recent years, neovim and vim have started to statically link libvterm,
+    so simply replacing the libvterm installed on your system as described above
+    will not allow Sixel Graphics to be displayed.
 
   o Unsupported vte api functions
     - vterm_new_with_allocator

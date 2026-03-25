@@ -112,8 +112,13 @@ int ui_display_reset_cmap(void);
 #define ui_display_reset_cmap() (0)
 #endif
 
+#ifdef USE_FRAMEBUFFER
+void ui_display_set_cursor_size(u_int width, u_int height);
+#endif
+
 #ifdef ROTATABLE_DISPLAY
 void ui_display_rotate(int rotate);
+
 #ifndef MANAGE_ROOT_WINDOWS_BY_MYSELF
 void ui_display_logical_to_physical_coordinates(ui_display_t *disp, int *x, int *y);
 #endif

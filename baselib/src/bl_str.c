@@ -423,6 +423,12 @@ char *bl_str_unescape(const char *str) {
       } else if (sscanf(str, "x%2x", &digit) == 1) {
         *p = (char)digit;
         str += 2;
+      } else if (*str == '0') {
+        for (digit = 0; '0' <= *str && *str <= '7'; str++) {
+          digit = digit * 8 + (*str - '0');
+        }
+        *p = (char)digit;
+        str--;
       } else if (*str == 'n') {
         *p = '\n';
       } else if (*str == 'r') {
@@ -432,6 +438,7 @@ char *bl_str_unescape(const char *str) {
       } else if (*str == 'e' || *str == 'E') {
         *p = '\033';
       } else {
+        /* not copy '\\' */
         *p = *str;
       }
     } else if (*str == '^') {
@@ -442,6 +449,7 @@ char *bl_str_unescape(const char *str) {
       } else if (*str == '?') {
         *p = '\x7f';
       } else {
+        /* not copy '^' */
         *p = *str;
       }
     } else {
@@ -465,8 +473,8 @@ void TEST_bl_str(void) {
   assert(strcmp(str, "xxxxdefxxxxdef") == 0);
   free(str);
 
-  str = bl_str_unescape("abc\\n\\r\\t\\e\\E^A\\x1b");
-  assert(strcmp(str, "abc\n\r\t\x1b\x1b\x01\x1b") == 0);
+  str = bl_str_unescape("abc\\n\\r\\t\\e\\E^A\\x1b\033");
+  assert(strcmp(str, "abc\n\r\t\x1b\x1b\x01\x1b\x1b") == 0);
   free(str);
 
   bl_msg_printf("PASS bl_str test.\n");

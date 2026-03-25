@@ -2760,12 +2760,15 @@ static void key_pressed(ui_window_t *win, XKeyEvent *event) {
 
 #ifdef USE_WIN32GUI
         /* XXX Is this necessary ? (changeset 2605) */
+        int kchar = ef_bytes_to_int(kstr, size);
+
         if (key == 0 && size > 0) {
           /* utf16 */
-          key = ef_bytes_to_int(kstr, size);
+          key = kchar;
         }
 #else
         /* Note that ksym can be 0 in receiving kstr converted by XCompose. (~/.XCompose) */
+        u_char kchar = kstr[0];
 #endif
         modcode++;
 
@@ -2776,7 +2779,7 @@ static void key_pressed(ui_window_t *win, XKeyEvent *event) {
              * 0x80 on win32, framebuffer and wayland.
              */
             (size == 1 && (key = kstr[0]) < 0x20)) {
-          if (vt_term_write_modified_key(screen->term, key, kstr[0], modcode)) {
+          if (vt_term_write_modified_key(screen->term, key, kchar, modcode)) {
             return;
           }
         }
@@ -7713,6 +7716,16 @@ int ui_screen_set_config(ui_screen_t *screen, const char *dev, /* can be NULL */
 #ifdef ROTATABLE_DISPLAY
   else if (strcmp(key, "rotate_display") == 0) {
     ui_display_rotate(strcmp(value, "right") == 0 ? 1 : (strcmp(value, "left") == 0 ? -1 : 0));
+  }
+#endif
+#ifdef USE_FRAMEBUFFER
+  else if (strcmp(key, "cursor_size") == 0) {
+    u_int width;
+    u_int height;
+
+    if (sscanf(value, "%d,%d", &width, &height) == 2) {
+      ui_display_set_cursor_size(width, height);
+    }
   }
 #endif
 #ifdef USE_CONSOLE

@@ -34,7 +34,8 @@ typedef enum vt_unicode_policy {
   NOT_USE_UNICODE_BOXDRAW_FONT = 0x4,
   ONLY_USE_UNICODE_BOXDRAW_FONT = 0x8,
   USE_UNICODE_DRCS = 0x10,
-  CONVERT_UNICODE_TO_ISCII = 0x20,
+  USE_UNICODE_DRCS_V3 = 0x20,
+  CONVERT_UNICODE_TO_ISCII = 0x30,
 
   UNICODE_POLICY_MAX
 
@@ -171,16 +172,16 @@ typedef struct vt_config_event_listener {
 typedef struct vt_parser *vt_parser_ptr_t;
 
 typedef struct vt_storable_states {
-  int is_saved : 1;
+  u_int is_saved : 1;
 
-  int is_bold : 1;
-  int is_italic : 1;
-  int is_reversed : 1;
-  int is_blinking : 1;
-  int is_invisible : 1;
-  int is_protected : 1;
-  int is_relative_origin : 1;
-  int last_column_flag : 1;
+  u_int is_bold : 1;
+  u_int is_italic : 1;
+  u_int is_reversed : 1;
+  u_int is_blinking : 1;
+  u_int is_invisible : 1;
+  u_int is_protected : 1;
+  u_int is_relative_origin : 1;
+  u_int last_column_flag : 1;
 
   /* vt_line_style_t */ int line_style : 7;
 #ifdef USE_COMPACT_TRUECOLOR
@@ -215,11 +216,6 @@ typedef struct vt_parser {
 
   vt_screen_t *screen;
   vt_termcap_ptr_t termcap;
-
-  ef_parser_t *cc_parser; /* char code parser */
-  ef_conv_t *cc_conv;     /* char code converter */
-  /* vt_char_encoding_t */ u_int16_t encoding;
-  /* ef_charset_t */ u_int16_t cs;
 
 #ifdef USE_COMPACT_TRUECOLOR
   u_int16_t fg_color;
@@ -267,63 +263,69 @@ typedef struct vt_parser {
   u_int32_t vtmode_flags[2];
   u_int32_t saved_vtmode_flags[2];
 
+  ef_parser_t *cc_parser; /* char code parser */
+  ef_conv_t *cc_conv;     /* char code converter */
+  /* vt_char_encoding_t */ u_int16_t encoding;
+
   /* vt_unicode_policy_t */ int8_t unicode_policy;
+  u_char prev_local_echo_char;
+
+  /* ef_charset_t */ u_int cs : 24;
 
   /* vt_mouse_report_mode_t */ int8_t mouse_mode;
   /* vt_extended_mouse_report_mode_t */ int8_t ext_mouse_mode;
   /* vt_locator_report_mode_t */ int8_t locator_mode;
 
   /* vt_alt_color_mode_t */ int8_t alt_color_mode;
-  u_int8_t col_size_of_width_a; /* 1 or 2 */
   /* vt_cursor_style_t */ int8_t cursor_style;
   /* vt_line_style_t */ int8_t line_style;
   int8_t modify_cursor_keys;
   int8_t modify_function_keys;
   int8_t modify_other_keys;
-  u_char prev_local_echo_char;
-
   u_int8_t hide_pointer_mode;
 
   /* Used for non iso2022 encoding */
-  /* ef_charset_t */ u_int16_t gl;
-  /* ef_charset_t */ u_int16_t g0;
-  /* ef_charset_t */ u_int16_t g1;
+  /* ef_charset_t */ u_int gl : 24;
+  /* ef_charset_t */ u_int g0 : 24;
+  /* ef_charset_t */ u_int g1 : 24;
 
-  /* XXX Use (vt_parser->xxxxx ? 1 : 0) in copying these flags to int, otherwise int is -1. */
-  int is_so : 1;
+  u_int is_transferring_data : 2; /* 0x1=send 0x2=recv */
+  u_int col_size_of_width_a : 2; /* 1 or 2 */
 
-  int is_bold : 1;
-  int is_italic : 1;
-  int is_reversed : 1;
-  int is_blinking : 1;
-  int is_invisible : 1;
+  u_int is_so : 1;
 
-  int use_char_combining : 1;
-  int use_multi_col_char : 1;
-  int logging_vt_seq : 1;
-  int is_app_keypad : 1;
-  int is_bracketed_paste_mode : 1;
-  int want_focus_event : 1;
-  int im_is_active : 1;
-  int sixel_scrolling : 1;
-  int yield : 1;
-  int is_auto_encoding : 1;
-  int use_auto_detect : 1;
-  int is_visible_cursor : 1;
-  int is_protected : 1;
-  int ignore_broadcasted_chars : 1;
-  int set_title_using_hex : 1;
-  int get_title_using_hex : 1;
-  int set_title_using_utf8 : 1;
-  int get_title_using_utf8 : 1;
-  int use_ansi_colors : 1;
-  int is_transferring_data : 2; /* 0x1=send 0x2=recv */
-  int is_zmodem_ready : 1;
-  int use_local_echo : 1;
-  int use_locked_title : 1;
+  u_int is_bold : 1;
+  u_int is_italic : 1;
+  u_int is_reversed : 1;
+  u_int is_blinking : 1;
+  u_int is_invisible : 1;
+
+  u_int use_char_combining : 1;
+  u_int use_multi_col_char : 1;
+  u_int logging_vt_seq : 1;
+  u_int is_app_keypad : 1;
+  u_int is_bracketed_paste_mode : 1;
+  u_int want_focus_event : 1;
+  u_int im_is_active : 1;
+  u_int sixel_scrolling : 1;
+  u_int yield : 1;
+  u_int is_auto_encoding : 1;
+  u_int use_auto_detect : 1;
+  u_int is_visible_cursor : 1;
+  u_int is_protected : 1;
+  u_int ignore_broadcasted_chars : 1;
+  u_int set_title_using_hex : 1;
+  u_int get_title_using_hex : 1;
+  u_int set_title_using_utf8 : 1;
+  u_int get_title_using_utf8 : 1;
+  u_int use_ansi_colors : 1;
+  u_int is_zmodem_ready : 1;
+  u_int use_local_echo : 1;
+  u_int use_locked_title : 1;
+  u_int invoke_macro : 1;
 
 #ifdef USE_VT52
-  int is_vt52_mode : 1;
+  u_int is_vt52_mode : 1;
 #endif
 
 } vt_parser_t;

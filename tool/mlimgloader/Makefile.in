@@ -23,10 +23,10 @@ LPOBL = @LPOBL@
 LPOBL_DEB = -lpobl_deb
 
 CFLAGS1 = $(CFLAGS_LOCAL) @POBL_CFLAGS@ @DEB_CFLAGS@ @GUI_CFLAGS@ @CFLAGS@ @CPPFLAGS@ \
-	@X_CFLAGS_AUX@ -I/usr/local/include
+	-I/usr/local/include
 
-CFLAGS2_gdk-pixbuf = @GDK_PIXBUF_CFLAGS@ @X_CFLAGS@ @EMOJI_CFLAGS@
-CFLAGS2_libpng = @LIBPNG_CFLAGS@ @X_CFLAGS@ @EMOJI_CFLAGS@
+CFLAGS2_gdk-pixbuf = @GDK_PIXBUF_CFLAGS@ @X_CFLAGS@ @X_CFLAGS_AUX@ @EMOJI_CFLAGS@
+CFLAGS2_libpng = @LIBPNG_CFLAGS@ @X_CFLAGS@ @X_CFLAGS_AUX@ @EMOJI_CFLAGS@
 
 CFLAGS = $(CFLAGS1) $(CFLAGS2_@MLIMGLOADER_LIB@) -DLIBEXECDIR=\"$(libexecdir)\" \
 	-DBINDIR=\"$(bindir)\"
@@ -47,6 +47,8 @@ LIBS2_sdl2_libpng = $(LIBS2_xlib_libpng)
 LIBS2_sdl2_gdk-pixbuf = $(LIBS2_xlib_gdk-pixbuf)
 LIBS2_beos_gdk-pixbuf = $(LIBS2_xlib_gdk-pixbuf)
 LIBS2_beos_libpng = $(LIBS2_xlib_libpng)
+LIBS2_quartz_gdk-pixbuf = $(LIBS2_xlib_gdk-pixbuf)
+LIBS2_quartz_libpng = $(LIBS2_xlib_libpng)
 
 # Segfault in cygwin without them.
 LIBS2_win32_gdk-pixbuf = -mwindows @GDK_PIXBUF_LIBS@

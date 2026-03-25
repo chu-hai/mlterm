@@ -781,8 +781,6 @@ void ui_display_update_modifier_mapping(ui_display_t *disp, u_int serial) { /* d
 
 XID ui_display_get_group_leader(ui_display_t *disp) { return None; }
 
-void ui_display_rotate(int rotate) {}
-
 int ui_display_init(struct android_app *app) {
   int ret;
   int ident;

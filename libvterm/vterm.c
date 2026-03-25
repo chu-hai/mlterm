@@ -22,6 +22,10 @@
 #define SIXEL_1BPP
 #include "../common/c_sixel.c"
 
+/*
+ * VTERM_COLOR_IS_INDEXED is introduced in this commit.
+ * https://github.com/neovim/libvterm/commit/b62a527b953bca224b9dcd250643a7f5660ef82e#diff-d5cd0b390462baabc29da64421918ff2a8290a315526512b37d0fe973515bed6R97
+ */
 #ifdef VTERM_COLOR_IS_INDEXED
 #define VTERM_EXPOSE_COLOR_INDEX
 #endif
@@ -51,6 +55,7 @@ typedef struct VTerm {
 
   u_char drcs_charset;
   u_char drcs_plane; /* '0'(94) or '1'(96) */
+  u_char drcs_intermed;
   u_int col_width;
   u_int line_height;
 
@@ -185,7 +190,9 @@ static void update_screen(VTerm *vterm) {
       bl_debug_printf("MODIFIED %d-%d at %d\n", r.start_col, r.end_col, r.end_row);
 #endif
 
-      (*vterm->vterm_screen_cb->damage)(r, vterm->vterm_screen_cbdata);
+      if (vterm->vterm_screen_cb && vterm->vterm_screen_cb->damage) {
+        (*vterm->vterm_screen_cb->damage)(r, vterm->vterm_screen_cbdata);
+      }
 
       vt_line_set_updated(line);
     }
@@ -246,7 +253,7 @@ static vt_char_t *xterm_get_picture_data(void *p, char *file_path,
                                          int *num_rows_small /* set only if drcs_sixel is 1. */,
                                          u_int32_t **sixel_palette, int *transparent,
                                          int keep_aspect, int drcs_sixel) {
-  static int old_drcs_sixel = -1;
+  static int drcs_sixel_version = -1;
   VTerm *vterm = p;
   u_int width;
   u_int height;
@@ -259,7 +266,19 @@ static vt_char_t *xterm_get_picture_data(void *p, char *file_path,
   int x, y;
   vt_char_t *buf;
   u_int buf_size;
-  char seq[24 + 4 /*%dx2*/ + 2 /*%cx2*/ + 1]; /* \x1b[?8800h\x1bP1;0;0;%d;1;3;%d;%c{ %c */
+  /*
+   * v3
+   * \x1b[?8800h\x1b[?8801h\x1bP1;0;0;%d;1;3;%d;0{ %c%c
+   *                                  2      2     1 1
+   *
+   * v2
+   * \x1b[?8800h\x1b[?8801l\x1bP1;0;0;%d;1;3;%d;%c{ %c
+   */
+#if 1
+  char seq[33 + 2 + 2 + 1 + 1 + 1];
+#else
+  char seq[32 + 4 /*%dx2*/ + 2 /*%cx2*/ + 1];
+#endif
 
   if (strcasecmp(file_path + strlen(file_path) - 4, ".six") != 0 || /* accepts sixel alone */
       !(fp = fopen(file_path, "r"))) {
@@ -288,15 +307,23 @@ static vt_char_t *xterm_get_picture_data(void *p, char *file_path,
   }
   data_p ++;
 
-  if (old_drcs_sixel == -1) {
-    const char *env = getenv("DRCS_SIXEL");
-    if (env && strcmp(env, "old") == 0) {
-      old_drcs_sixel = 1;
-      write_to_stdout("\x1b]5379;old_drcs_sixel=true\x07", 27); /* for mlterm */
+  if (drcs_sixel_version == -1) {
+    /*
+     * DRCS_SIXEL_VERSION=3: mlterm >= 3.9.5, RLogin >= 2.31.2
+     * DRCS_SIXEL_VERSION=2: mlterm >= 3.8.5, RLogin >= 2.23.1
+     */
+    const char *env = getenv("DRCS_SIXEL_VERSION");
+    if (env == NULL) {
+      drcs_sixel_version = 3;
     } else {
-      old_drcs_sixel = 0;
-      write_to_stdout("\x1b]5379;old_drcs_sixel=false\x07", 28); /* for mlterm */
+      drcs_sixel_version = atoi(env);
     }
+  }
+
+  if (drcs_sixel_version == 1) {
+    write_to_stdout("\x1b]5379;old_drcs_sixel=true\x07", 27); /* for mlterm */
+  } else {
+    write_to_stdout("\x1b]5379;old_drcs_sixel=false\x07", 28); /* for mlterm */
   }
 
   if (transparent) {
@@ -331,7 +358,7 @@ static vt_char_t *xterm_get_picture_data(void *p, char *file_path,
   } else {
     /* "%d;%d;%d;%d */
 
-    if (old_drcs_sixel) {
+    if (drcs_sixel_version == 1) {
       /* skip "X;X;X;X (rlogin 2.23.0 doesn't recognize it) */
       data_p++;
       while ('0' <= *data_p && *data_p <= ';') { data_p++; }
@@ -344,8 +371,13 @@ static vt_char_t *xterm_get_picture_data(void *p, char *file_path,
   len -= skipped_len;
 
   if (vterm->drcs_charset == '\0') {
-    vterm->drcs_charset = '0';
+    if (drcs_sixel_version >= 3) {
+      vterm->drcs_charset = 0x40;
+    } else {
+      vterm->drcs_charset = '0';
+    }
     vterm->drcs_plane = '0';
+    vterm->drcs_intermed = 0x20;
     get_cell_size(vterm);
 
     /* Pcmw >= 5 in DECDLD */
@@ -356,7 +388,7 @@ static vt_char_t *xterm_get_picture_data(void *p, char *file_path,
     }
   }
 
-  if (old_drcs_sixel) {
+  if (drcs_sixel_version == 1) {
     /* compatible with old rlogin (2.23.0 or before) */
     *num_cols = width / vterm->col_width;
     *num_rows = height / vterm->line_height;
@@ -367,85 +399,151 @@ static vt_char_t *xterm_get_picture_data(void *p, char *file_path,
 
   buf_size = (*num_cols) * (*num_rows);
 
-#if 0
-  /*
-   * XXX
-   * The way of drcs_charset increment from 0x7e character set may be different
-   * between terminal emulators.
-   */
-  if (vterm->drcs_charset > '0' &&
-      (buf_size + 0x5f) / 0x60 > 0x7e - vterm->drcs_charset + 1) {
-    switch_94_96_cs(vterm);
-  }
-#endif
-
-  sprintf(seq, "\x1b[?8800h\x1bP1;0;0;%d;1;3;%d;%c{ %c",
-          vterm->col_width, vterm->line_height, vterm->drcs_plane, vterm->drcs_charset);
-  write_to_stdout(seq, strlen(seq));
-  while (1) {
-    write_to_stdout(data_p, len);
-    if ((len = fread(data, 1, sizeof(data), fp)) == 0) {
-      break;
+  if (drcs_sixel_version >= 3) {
+    unsigned int code = 0x100000 + ((vterm->drcs_intermed - 0x20) * 63 +
+                                    (vterm->drcs_charset - 0x40)) * 94;
+    if (code + buf_size > 0x10ffff) {
+      /*
+       * DRCSMMv3: 0x10000 - 0x10ffff
+       *
+       * Set drcs_intermed and drcs_charset not to exceed 0x10ffff.
+       * drcs_intermed = 0x2b (+) \
+       * drcs_charset = 0x44 (D)   |--> 0x10ffff
+       * char = 0x32 (2)          /
+       *
+       * https://github.com/kmiya-culti/RLogin/issues/152#issuecomment-3588412510
+       */
+      vterm->drcs_intermed = 0x20;
+      vterm->drcs_charset = 0x40;
+      code = 0x100000;
     }
-    data_p = data;
-  }
 
-  free(all_data);
-  fclose(fp);
+    sprintf(seq, "\x1b[?8800h\x1b[?8801h\x1bP1;0;0;%d;1;3;%d;0{ %c%c",
+            vterm->col_width, vterm->line_height, vterm->drcs_intermed, vterm->drcs_charset);
+    write_to_stdout(seq, strlen(seq));
+    while (1) {
+      write_to_stdout(data_p, len);
+      if ((len = fread(data, 1, sizeof(data), fp)) == 0) {
+        break;
+      }
+      data_p = data;
+    }
 
-#if 0
-  bl_debug_printf("Image cols %d/%d=%d rows %d/%d=%d\n",
-                  width, vterm->col_width, *num_cols, height, vterm->line_height, *num_rows);
-#endif
+    free(all_data);
+    fclose(fp);
 
-  if ((buf = vt_str_new(buf_size))) {
-    vt_char_t *buf_p;
-    int col;
-    int row;
-    u_int code;
+    if ((buf = vt_str_new(buf_size))) {
+      vt_char_t *buf_p = buf;
+      int col;
+      int row;
+      int count = 0;
 
-    code = 0x100020 + (vterm->drcs_plane == '1' ? 0x80 : 0) + vterm->drcs_charset * 0x100;
-
-    buf_p = buf;
-    for (row = 0; row < *num_rows; row++) {
-      for (col = 0; col < *num_cols; col++) {
-#if 0
-        /* for old rlogin */
-        if (code == 0x20) {
-          vt_char_copy(buf_p++, vt_sp_ch());
-        } else
-#endif
-        {
+      for(row = 0; row < *num_rows; row++) {
+        for(col = 0; col < *num_cols; col++) {
           /* pua is ambiguous width but always regarded as halfwidth. */
           vt_char_set(buf_p++, code++, ISO10646_UCS4_1, 0 /* fullwidth */, 0 /* awidth */,
                       0 /* comb */, VT_FG_COLOR, VT_BG_COLOR, 0 /* bold */, 0 /* italic */,
                       0 /* line_style */, 0 /* blinking */, 0 /* protected */);
-          if ((code & 0x7f) == 0x0) {
-#if 0
-            /* for old rlogin */
-            code = 0x20;
-#else
-            if (vterm->drcs_charset == 0x7e) {
-              switch_94_96_cs(vterm);
-            } else {
-              vterm->drcs_charset++;
+          if (++count == 94) {
+            count = 0;
+            if (++vterm->drcs_charset == 0x7f) {
+              vterm->drcs_charset = 0x40;
+              if (++vterm->drcs_intermed == 0x30) {
+                vterm->drcs_intermed = 0x20;
+                code = 0x100000;
+              }
             }
-
-            code = 0x100020 + (vterm->drcs_plane == '1' ? 0x80 : 0) +
-                   vterm->drcs_charset * 0x100;
-#endif
           }
         }
       }
-    }
 
-    if (vterm->drcs_charset == 0x7e) {
+      if (++vterm->drcs_charset == 0x7f) {
+        vterm->drcs_charset = 0x40;
+        if (++vterm->drcs_intermed == 0x30) {
+          vterm->drcs_intermed = 0x20;
+        }
+      }
+
+      return buf;
+    }
+  } else {
+#if 0
+    /*
+     * XXX
+     * The way of drcs_charset increment from 0x7e character set may be different
+     * between terminal emulators.
+     */
+    if (vterm->drcs_charset > '0' &&
+        (buf_size + 0x5f) / 0x60 > 0x7e - vterm->drcs_charset + 1) {
       switch_94_96_cs(vterm);
-    } else {
-      vterm->drcs_charset++;
+    }
+#endif
+
+    sprintf(seq, "\x1b[?8800h\x1b[?8801l\x1bP1;0;0;%d;1;3;%d;%c{ %c",
+            vterm->col_width, vterm->line_height, vterm->drcs_plane, vterm->drcs_charset);
+    write_to_stdout(seq, strlen(seq));
+    while (1) {
+      write_to_stdout(data_p, len);
+      if ((len = fread(data, 1, sizeof(data), fp)) == 0) {
+        break;
+      }
+      data_p = data;
     }
 
-    return buf;
+    free(all_data);
+    fclose(fp);
+
+#if 0
+    bl_debug_printf("Image cols %d/%d=%d rows %d/%d=%d\n",
+                    width, vterm->col_width, *num_cols, height, vterm->line_height, *num_rows);
+#endif
+
+    if ((buf = vt_str_new(buf_size))) {
+      vt_char_t *buf_p = buf;
+      int col;
+      int row;
+      u_int code = 0x100020 + (vterm->drcs_plane == '1' ? 0x80 : 0) + vterm->drcs_charset * 0x100;
+
+      for (row = 0; row < *num_rows; row++) {
+        for (col = 0; col < *num_cols; col++) {
+#if 0
+          /* for old rlogin */
+          if (code == 0x20) {
+            vt_char_copy(buf_p++, vt_sp_ch());
+          } else
+#endif
+            {
+              /* pua is ambiguous width but always regarded as halfwidth. */
+              vt_char_set(buf_p++, code++, ISO10646_UCS4_1, 0 /* fullwidth */, 0 /* awidth */,
+                          0 /* comb */, VT_FG_COLOR, VT_BG_COLOR, 0 /* bold */, 0 /* italic */,
+                          0 /* line_style */, 0 /* blinking */, 0 /* protected */);
+              if ((code & 0x7f) == 0x0) {
+#if 0
+                /* for old rlogin */
+                code = 0x20;
+#else
+                if (vterm->drcs_charset == 0x7e) {
+                  switch_94_96_cs(vterm);
+                } else {
+                  vterm->drcs_charset++;
+                }
+
+                code = 0x100020 + (vterm->drcs_plane == '1' ? 0x80 : 0) +
+                  vterm->drcs_charset * 0x100;
+#endif
+              }
+            }
+        }
+      }
+
+      if (vterm->drcs_charset == 0x7e) {
+        switch_94_96_cs(vterm);
+      } else {
+        vterm->drcs_charset++;
+      }
+
+      return buf;
+    }
   }
 
   return NULL;
@@ -459,7 +557,10 @@ error_closing_fp:
 static void xterm_bel(void *p) {
   VTerm *vterm = p;
 
-  (*vterm->vterm_screen_cb->bell)(vterm->vterm_screen_cbdata);
+  /* emacs-libvterm set NULL to bell. */
+  if (vterm->vterm_screen_cb && vterm->vterm_screen_cb->bell) {
+    (*vterm->vterm_screen_cb->bell)(vterm->vterm_screen_cbdata);
+  }
 }
 
 static void line_scrolled_out(void *p) {
@@ -479,7 +580,9 @@ static void line_scrolled_out(void *p) {
       vterm_screen_get_cell((VTermScreen*)vterm, pos, cells + pos.col);
     }
 
-    (*vterm->vterm_screen_cb->sb_pushline)(cols, cells, vterm->vterm_screen_cbdata);
+    if (vterm->vterm_screen_cb && vterm->vterm_screen_cb->sb_pushline) {
+      (*vterm->vterm_screen_cb->sb_pushline)(cols, cells, vterm->vterm_screen_cbdata);
+    }
   }
 }
 
@@ -598,7 +701,7 @@ size_t vterm_input_write(VTerm *vterm, const char *bytes, size_t len) {
 
   vt_term_write_loopback(vterm->term, bytes, len);
 
-  if (vterm->vterm_screen_cb) {
+  if (vterm->vterm_screen_cb && vterm->vterm_screen_cb->movecursor) {
     (*vterm->vterm_screen_cb->movecursor)(get_cursor_pos(vterm->term), oldpos,
                                           vt_term_is_visible_cursor(vterm->term),
                                           vterm->vterm_screen_cbdata);
@@ -773,11 +876,10 @@ void vterm_state_set_callbacks(VTermState *state, const VTermStateCallbacks *cal
 
 void *vterm_state_get_cbdata(VTermState *state) { return NULL; }
 
-#if defined(VTERM_VERSION_MAJOR) && defined(VTERM_VERSION_MINOR) && \
-    (VTERM_VERSION_MAJOR * 1000 + VTERM_VERSION_MINOR >= 2)
+#if VTERM_CHECK_VERSION2(0, 2)
 /*
- * VTermStateFallbacks is introduced at revision 759.
- * https://bazaar.launchpad.net/~libvterm/libvterm/trunk/revision/759
+ * VTermStateFallbacks is introduced at this commit.
+ * https://github.com/neovim/libvterm/commit/337b954044e07aa86dd1e96b9c04b68193a8ef88
  */
 void vterm_state_set_unrecognised_fallbacks(VTermState *state,
                                             const VTermStateFallbacks *fallbacks, void *user) {}
@@ -799,7 +901,7 @@ void vterm_state_reset(VTermState *state, int hard) {
 }
 
 void vterm_state_get_cursorpos(const VTermState *state, VTermPos *cursorpos) {
-  *cursorpos = get_cursor_pos((vt_term_t*)state);
+  *cursorpos = get_cursor_pos(((VTerm*)state)->term);
 }
 
 void vterm_state_get_default_colors(const VTermState *state, VTermColor *default_fg,
@@ -847,6 +949,27 @@ void vterm_state_set_palette_color(VTermState *state, int index, const VTermColo
 #endif
   vt_customize_color_file(vt_get_color_name(index), rgb, 0);
 }
+
+#ifdef VTERM_EXPOSE_COLOR_INDEX
+int vterm_color_is_equal(const VTermColor *a, const VTermColor *b) {
+  if (a->type == b->type) {
+    if (VTERM_COLOR_IS_RGB(a)) {
+      return (a->rgb.red == b->rgb.red && a->rgb.green == b->rgb.green &&
+              a->rgb.blue == b->rgb.blue);
+    } else if (VTERM_COLOR_IS_INDEXED(a)) {
+      return (a->indexed.idx == b->indexed.idx);
+    }
+  }
+
+  return 0;
+}
+#endif
+
+#if VTERM_CHECK_VERSION2(0, 2)
+void vterm_state_set_selection_callbacks(VTermState *state,
+                                         const VTermSelectionCallbacks *callbacks, void *user,
+                                         char *buffer, size_t buflen) {}
+#endif
 
 void vterm_state_set_bold_highbright(VTermState *state, int bold_is_highbright) {}
 

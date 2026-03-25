@@ -619,6 +619,10 @@ The default is \fBtrue\fR.
 Whether to use ConPTY.
 The default is \fBtrue\fR.
 .TP
+\fB\-\-crsz\fR=\fIvalue\fR (Available for mlterm-fb)
+Specify cursor width and height in pixel.
+The default is \fB7,15\fR.
+.TP
 \fB\-\-csc\fR=\fIvalue\fR (Available for mlterm-con)
 Specify the number of sixel graphics colors of the console where mlterm-con works.
 A valid value is 16, 256 or full. The default is \fB16\fR.
@@ -1620,6 +1624,9 @@ Specify background color for cursor.
 .TP
 \fBcursor_fg_color=\fIcolor\fR (\fB\-9\fR, \fB\-\-crfg\fR)
 Specify foreground color for cursor.
+.TP
+\fBcursor_size=\fIvalue\fR (\fB\-\-crsz\fR) (Available for mlterm-fb)
+Specify cursor width and height in pixel.
 .TP
 \fBdaemon_mode=\fImode\fR (\fB\-j\fR, \fB\-\-daemon\fR)
 Start as a daemon process.

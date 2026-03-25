@@ -572,6 +572,12 @@ static int receive_mouse_event(int fd) {
 #ifdef EVIOCGABS
       static int max_abs_x;
       static int max_abs_y;
+      static int prev_abs_x = -1;
+      static int prev_abs_y = -1;
+      int tmp;
+#ifdef ABS_MT_TRACKING_ID
+      static int mttrackingid;
+#endif
 
       if (max_abs_x == 0 /* || max_abs_y == 0 */) {
         struct input_absinfo info;
@@ -583,18 +589,40 @@ static int receive_mouse_event(int fd) {
         max_abs_y = info.maximum;
       }
 
+#ifdef ABS_MT_TRACKING_ID
+      if (ev.code == ABS_MT_TRACKING_ID) {
+        if (((int)ev.value) != mttrackingid) {
+          mttrackingid = ev.value;
+          prev_abs_x = prev_abs_y = -1;
+        }
+      } else
+#endif
       if (ev.code == ABS_PRESSURE) {
         ev.type = EV_KEY;
         ev.code = BTN_LEFT;
         ev.value = 1; /* ButtonPress */
       } else if (ev.code == ABS_X) {
-        ev.type = EV_REL;
-        ev.code = REL_X;
-        ev.value = ev.value * _display.width / max_abs_x - _mouse.x;
+        if (prev_abs_x == -1) {
+          prev_abs_x = ev.value;
+          continue;
+        } else {
+          ev.type = EV_REL;
+          ev.code = REL_X;
+          tmp = (((int)ev.value) - prev_abs_x) * ((int)_display.width) / max_abs_x;
+          prev_abs_x = ev.value;
+          ev.value = tmp;
+        }
       } else if (ev.code == ABS_Y) {
-        ev.type = EV_REL;
-        ev.code = REL_Y;
-        ev.value = ev.value * _display.height / max_abs_y - _mouse.y;
+        if (prev_abs_y == -1) {
+          prev_abs_y = ev.value;
+          continue;
+        } else {
+          ev.type = EV_REL;
+          ev.code = REL_Y;
+          tmp = (((int)ev.value) - prev_abs_y) * ((int)_display.height) / max_abs_y;
+          prev_abs_y = ev.value;
+          ev.value = tmp;
+        }
       } else
 #endif
       {

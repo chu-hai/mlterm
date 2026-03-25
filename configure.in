@@ -545,6 +545,8 @@ elif test "$gui" = "quartz" ; then
 	fi
 	AC_SUBST(COCOAOBJ)
 	AC_SUBST(COCOA_LIBS)
+	# for mlimgloader
+	X_CFLAGS_AUX="$X_CFLAGS $X_CFLAGS_AUX"
 	X_CFLAGS=""
 	VT_NORM_OBJ="vt_normalize.o"
 	VT_NORM_CFLAGS="-DUSE_NORMALIZE"

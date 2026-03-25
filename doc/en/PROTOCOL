@@ -41,7 +41,7 @@ version 20250330
                   bidi_separators | bl_color | borderless | box_drawing_font | brightness |
                   click_interval | co_color | col_size_of_width_a | console_encoding |
                   console_sixel_colors | contrast | cursor_bg_color | cursor_fg_color |
-                  emoji_path | emoji_file_format | encoding | exit_backscroll_by_pty |
+                  cursor_size | emoji_path | emoji_file_format | encoding | exit_backscroll_by_pty |
                   fade_ratio | fg_color | fontsize | format_other_keys | gamma | geometry |
                   hide_underline | icon_path | input_method | it_color | letter_space |
                   line_space | local_echo_wait | locale | logging_msg | logging_vt_seq |
@@ -118,6 +118,7 @@ version 20250330
   console_sixel_colors = 16 | 256 | full
   cursor_bg_color = <color name> | <color rgb>
   cursor_fg_color = <color name> | <color rgb>
+  cursor_size = <any ASCII decimal digit>,<any ASCII decimal digit>
   depth = 8 | 16 | 24 | 32 (xlib only)
   emoji_path = <directory> | <open type font file>
   emoji_file_format = <format 1>(,<format 2>)
