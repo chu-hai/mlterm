@@ -70,6 +70,7 @@ static char *im_cursor_color = NULL;
 #ifndef NO_IMAGE
 static int has_transparent_inline_pics;
 #endif
+static ui_dnd_escape_mode_t dnd_escape_mode = DND_ESCAPE_BACKSLASH;
 
 /* --- static functions --- */
 
@@ -2547,7 +2548,7 @@ static void copymode_key(ui_screen_t *screen, int ksym, u_int state, u_char *str
       } else if (!ui_window_is_selection_owner(&screen->window, SEL_CLIPBOARD)) {
         ui_window_set_selection_owner(&screen->window, CurrentTime, SEL_CLIPBOARD);
       }
-    } else if (ksym == XK_Left || ksym == 'h') {
+    } else if (ksym == XK_Left || ksym == 'h' || (ksym == 'b' && (state & ControlMask))) {
       if (vt_line_is_rtl(line) &&
           screen->copymode->cursor_char_index <= get_beg_in_rtl_line(line)) {
         screen->copymode->cursor_char_index = -1;
@@ -2563,7 +2564,7 @@ static void copymode_key(ui_screen_t *screen, int ksym, u_int state, u_char *str
           return;
         }
       }
-    } else if (ksym == XK_Right || ksym == 'l') {
+    } else if (ksym == XK_Right || ksym == 'l' || (ksym == 'f' && (state & ControlMask))) {
       if (screen->copymode->cursor_char_index + 1 < vt_line_get_num_filled_chars_except_sp(line)) {
         screen->copymode->cursor_char_index++;
       } else {
@@ -2576,9 +2577,9 @@ static void copymode_key(ui_screen_t *screen, int ksym, u_int state, u_char *str
           return;
         }
       }
-    } else if (ksym == XK_Up || ksym == 'k') {
+    } else if (ksym == XK_Up || ksym == 'k' || (ksym == 'p' && (state & ControlMask))) {
       copymode_move_vertical(screen, -1);
-    } else if (ksym == XK_Down || ksym == 'j') {
+    } else if (ksym == XK_Down || ksym == 'j' || (ksym == 'n' && (state & ControlMask))) {
       copymode_move_vertical(screen, 1);
     } else if (ksym == XK_Prior || ksym == 'u') {
       copymode_move_vertical(screen, -(vt_term_get_rows(screen->term)));
@@ -3162,10 +3163,42 @@ static void utf_selection_requested(ui_window_t *win, XSelectionRequestEvent *ev
   }
 }
 
-static void xct_selection_notified(ui_window_t *win, u_char *str, size_t len) {
+static u_char *escape_file_name(const u_char *str, size_t len) {
+  u_char *p;
+
+  if (dnd_escape_mode == DND_ESCAPE_NONE) {
+    return NULL;
+  }
+
+  if (str[len] != '\0') {
+    if ((p = alloca(len + 1)) == NULL) {
+      return NULL;
+    }
+    memcpy(p, str, len);
+    p[len] = '\0';
+    str = p;
+  }
+
+  if (dnd_escape_mode == DND_ESCAPE_BACKSLASH) {
+    return bl_str_escape_by_backslash(str, " ");
+  } else if (bl_count_char_in_str(str, ' ') > 0) {
+    char *fmt = (dnd_escape_mode == DND_ESCAPE_QUOTE) ? "\'%s\'" : "\"%s\"";
+
+    if ((p = malloc(len + 2 + 1))) {
+      sprintf(p, fmt, str);
+
+      return p;
+    }
+  }
+
+  return NULL;
+}
+
+static void xct_selection_notified(ui_window_t *win, u_char *str, size_t len, int is_dnd) {
   ui_screen_t *screen;
   ef_conv_t *utf_conv;
   ef_parser_t *xct_parser;
+  u_char *escaped;
 
   if (!(xct_parser = ui_get_selection_parser(0))) {
     return;
@@ -3179,6 +3212,11 @@ static void xct_selection_notified(ui_window_t *win, u_char *str, size_t len) {
    */
   convert_nl_to_cr1(str, len);
 #endif
+
+  if (is_dnd && (escaped = escape_file_name(str, len))) {
+    str = escaped;
+    len = strlen(str);
+  }
 
   screen = (ui_screen_t *)win;
 
@@ -3231,10 +3269,15 @@ static void xct_selection_notified(ui_window_t *win, u_char *str, size_t len) {
   if (vt_term_is_bracketed_paste_mode(screen->term)) {
     write_to_pty(screen, "\x1b[201~", 6, NULL);
   }
+
+  if (is_dnd) {
+    free(escaped);
+  }
 }
 
-static void utf_selection_notified(ui_window_t *win, u_char *str, size_t len) {
+static void utf_selection_notified(ui_window_t *win, u_char *str, size_t len, int is_dnd) {
   ui_screen_t *screen;
+  u_char *escaped;
 
 #ifdef USE_WIN32GUI
   len = trim_trailing_newline_in_pasting3((WCHAR*)str, len / 2) * 2;
@@ -3254,6 +3297,11 @@ static void utf_selection_notified(ui_window_t *win, u_char *str, size_t len) {
 #endif
 #endif
 
+  if (is_dnd && (escaped = escape_file_name(str, len))) {
+    str = escaped;
+    len = strlen(str);
+  }
+
   screen = (ui_screen_t *)win;
 
   if (vt_term_is_bracketed_paste_mode(screen->term)) {
@@ -3264,6 +3312,10 @@ static void utf_selection_notified(ui_window_t *win, u_char *str, size_t len) {
 
   if (vt_term_is_bracketed_paste_mode(screen->term)) {
     write_to_pty(screen, "\x1b[201~", 6, NULL);
+  }
+
+  if (is_dnd) {
+    free(escaped);
   }
 }
 
@@ -5209,6 +5261,8 @@ static void get_config_intern(ui_screen_t *screen, const char *dev, /* can be NU
     } else {
       value = "false";
     }
+  } else if (strcmp(key, "dnd_escape_mode") == 0) {
+    value = ui_get_dnd_escape_mode_name(dnd_escape_mode);
   }
 #ifdef USE_XLIB
   else if (strcmp(key, "depth") == 0) {
@@ -6695,6 +6749,10 @@ void ui_set_mod_keys_to_stop_mouse_report(const char *keys) {
   }
 }
 
+void ui_set_dnd_escape_mode(ui_dnd_escape_mode_t mode) {
+  dnd_escape_mode = mode;
+}
+
 #ifdef USE_IM_CURSOR_COLOR
 void ui_set_im_cursor_color(char *color) { im_cursor_color = strdup(color); }
 #endif
@@ -7604,6 +7662,8 @@ int ui_screen_set_config(ui_screen_t *screen, const char *dev, /* can be NULL */
     if (update_special_visual(screen)) {
       vt_term_set_modified_all_lines_in_screen(screen->term);
     }
+  } else if (strcmp(key, "dnd_escape_mode") == 0) {
+    ui_set_dnd_escape_mode(ui_get_dnd_escape_mode_by_name(value));
   }
 #ifdef USE_OT_LAYOUT
   else if (strcmp(key, "use_ot_layout") == 0) {

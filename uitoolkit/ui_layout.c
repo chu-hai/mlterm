@@ -521,7 +521,7 @@ static void key_pressed(ui_window_t *win, XKeyEvent *event) {
   }
 }
 
-static void utf_selection_notified(ui_window_t *win, u_char *buf, size_t len) {
+static void utf_selection_notified(ui_window_t *win, u_char *buf, size_t len, int is_dnd) {
   ui_layout_t *layout;
   ui_window_t *child;
 
@@ -529,10 +529,10 @@ static void utf_selection_notified(ui_window_t *win, u_char *buf, size_t len) {
   child = get_current_window(layout);
 
   /* dispatch to screen */
-  (*child->utf_selection_notified)(child, buf, len);
+  (*child->utf_selection_notified)(child, buf, len, is_dnd);
 }
 
-static void xct_selection_notified(ui_window_t *win, u_char *buf, size_t len) {
+static void xct_selection_notified(ui_window_t *win, u_char *buf, size_t len, int is_dnd) {
   ui_layout_t *layout;
   ui_window_t *child;
 
@@ -540,7 +540,7 @@ static void xct_selection_notified(ui_window_t *win, u_char *buf, size_t len) {
   child = get_current_window(layout);
 
   /* dispatch to screen */
-  (*child->xct_selection_notified)(child, buf, len);
+  (*child->xct_selection_notified)(child, buf, len, is_dnd);
 }
 
 #ifndef DISABLE_XDND
@@ -1306,7 +1306,7 @@ int ui_layout_add_child(ui_layout_t *layout, ui_screen_t *screen, int horizontal
   int is_percent = 1;
 
   if (sep_str) {
-    char *p;
+    const char *p;
 
     if ((p = strchr(sep_str, '%'))) {
       if (!bl_str_n_to_uint(&sep, sep_str, p - sep_str) || sep >= 100 || sep == 0) {
@@ -1671,7 +1671,7 @@ int ui_layout_resize(ui_layout_t *layout, ui_screen_t *screen, int horizontal,
   struct terminal *child = NULL;
   int size;
   int is_percent;
-  char *p;
+  const char *p;
 
   if ((p = strchr(size_str, '%'))) {
     if (!bl_str_n_to_int(&size, size_str, p - size_str) || size <= 0) {

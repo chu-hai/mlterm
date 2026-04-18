@@ -989,7 +989,8 @@ int ui_window_receive_event(ui_window_t *win, XEvent *event) {
     case UI_SELECTION_NOTIFIED:
       if (win->utf_selection_notified) {
         (*win->utf_selection_notified)(win, ((XSelectionNotifyEvent*)event)->data,
-                                       ((XSelectionNotifyEvent*)event)->len);
+                                       ((XSelectionNotifyEvent*)event)->len,
+                                       ((XSelectionNotifyEvent*)event)->is_dnd);
       }
       break;
 
@@ -1201,7 +1202,7 @@ int ui_window_utf_selection_request(ui_window_t *win, Time time, ui_selection_fl
       char *str2;
 
       if ((str2 = alloca(len + 1))) {
-        (*win->utf_selection_notified)(win, memcpy(str2, str, len + 1), len);
+        (*win->utf_selection_notified)(win, memcpy(str2, str, len + 1), len, 0);
 
         return 1;
       }
