@@ -61,9 +61,6 @@ static SDL_threadID main_tid;
 #ifdef MONITOR_PTY
 static SDL_cond *pty_cond;
 static SDL_mutex *mutex;
-#ifdef USE_SDL2_KMSDRM
-static SDL_Thread *pty_thrd;
-#endif
 #endif
 #ifdef USE_SDL2_KMSDRM
 static Uint32 fb_xres;
@@ -1175,7 +1172,6 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
     num_displays = 1;
 
 #ifdef MONITOR_PTY
-#ifndef USE_SDL2_KMSDRM
     {
       SDL_Thread *thrd;
 
@@ -1184,13 +1180,6 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
       thrd = SDL_CreateThread(monitor_ptys, "pty_thread", NULL);
       SDL_DetachThread(thrd);
     }
-#else
-    {
-      pty_cond = SDL_CreateCond();
-      mutex = SDL_CreateMutex();
-      pty_thrd = SDL_CreateThread(monitor_ptys, "pty_thread", NULL);
-    }
-#endif
 #endif
   } else {
     num_displays ++;
@@ -1220,18 +1209,11 @@ void ui_display_close(ui_display_t *disp) {
         cur_preedit_text = NULL;
 
 #ifdef MONITOR_PTY
-#ifndef USE_SDL2_KMSDRM
         SDL_LockMutex(mutex);
         SDL_CondSignal(pty_cond);
         SDL_UnlockMutex(mutex);
         SDL_DestroyMutex(mutex);
         SDL_DestroyCond(pty_cond);
-#else
-        SDL_CondSignal(pty_cond);
-        SDL_WaitThread(pty_thrd, NULL);
-        SDL_DestroyMutex(mutex);
-        SDL_DestroyCond(pty_cond);
-#endif
 #endif
         SDL_Quit();
       } else {
