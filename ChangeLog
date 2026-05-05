@@ -1,3 +1,55 @@
+2026-05-04  Araki Ken <arakiken@user.sf.net>
+
+	* xlib/ui_display.c: ui_display_receive_next_event()
+	  replaces event.xany.window to cheat XFilterEvent().
+
+	* xlib/ui_window.c: Drop calling XFilterEvent() twice.
+
+2026-05-03  Araki Ken <arakiken@user.sf.net>
+
+	* ui_screen.c: escape_file_name() replaces backslash with slash if
+	  USE_WIN32API is defined.
+
+	* main_loop.c: Drop -j/daemon_mode option if NO_DAEMON is defined.
+
+	* daemon.h: Define NO_DAEMON if USE_WIN32API, USE_QUARTZ, USE_BEOS or
+	  USE_FRAMEBUFFER is defined.
+
+	* README.android, README.beos, README.cocoa{touch}: Update.
+
+	* Android.mk: Add -DNO_DAEMON.
+
+2026-05-03  Araki Ken <arakiken@user.sf.net>
+
+	* wayland/ui_display.c: Add posix_fallocate() for MacOS.
+
+	* ci.yml: Add wayland to --with-gui option in build-macos.
+
+2026-05-02  Araki Ken <arakiken@user.sf.net>
+
+	* sdl2/ui_display.c:
+	  - Process SDL_WINDOWEVENT_EXPOSED.
+	  - Fix dead lock when closing the last window via the close button.
+	  - ui_display_{open|close}() and ui_get_opened_displays() support
+	    genuine daemon mode.
+
+	* ui_event_source.c: ui_event_source_process() calls select() for
+	  additional_fds if NO_DISPLAY_FD is defined and USE_WIN32API is not
+	  defined.
+
+2026-04-18  Araki Ken <arakiken@user.sf.net>
+
+	* ui_screen.c: Remove wcslen() and add 'size_t *len_ret' to arguments
+	  of escape_file_name2().
+
+2026-04-18  Araki Ken <arakiken@user.sf.net>
+
+	* ui_screen.c: Add escape_file_name2() for USE_WIN32GUI.
+
+	* win32/ui_dnd.c: Minor fixes.
+
+	* man/mlterm.1; Update.
+
 2026-04-12  Araki Ken <arakiken@user.sf.net>
 
 	* beos.cpp, beos/ui.h, beos/ui_window.c, cocoa.m, quartz/ui.h, quartz/ui_window.c:

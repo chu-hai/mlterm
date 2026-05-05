@@ -61,6 +61,8 @@ static SDL_threadID main_tid;
 #ifdef MONITOR_PTY
 static SDL_cond *pty_cond;
 static SDL_mutex *mutex;
+static int processing_pty_event;
+static int thread_counter;
 #endif
 #ifdef USE_SDL2_KMSDRM
 static Uint32 fb_xres;
@@ -513,6 +515,7 @@ static int monitor_ptys(void *p) {
   u_int count;
   SDL_Event ev;
 
+  thread_counter++;  /* XXX should be enclosed by mutexlock */
   SDL_LockMutex(mutex);
 
   while (1) {
@@ -521,7 +524,15 @@ static int monitor_ptys(void *p) {
 #ifdef DEBUG
         bl_debug_printf("Finish monitoring pty.\n");
 #endif
+        thread_counter--; /* XXX should be enclosed by mutexlock */
         SDL_UnlockMutex(mutex);
+
+        if (thread_counter == 0) {
+          processing_pty_event = 0;
+          SDL_DestroyMutex(mutex);
+          SDL_DestroyCond(pty_cond);
+          SDL_Quit();
+        }
 
         return 0;
       }
@@ -714,9 +725,9 @@ static void poll_event(void) {
   Uint32 spent_time = 0;
   Uint32 now = SDL_GetTicks();
   Uint32 skipped_msec;
-#ifdef MONITOR_PTY
-  static int processing_pty_event;
+  static SDL_EventType prev_ev_type;
 
+#ifdef MONITOR_PTY
   if (processing_pty_event) {
     processing_pty_event = 0;
     SDL_LockMutex(mutex);
@@ -1053,6 +1064,14 @@ static void poll_event(void) {
       }
     } else if (ev.window.event == SDL_WINDOWEVENT_EXPOSED) {
       get_display(ev.window.windowID)->display->damaged = 1;
+    } else if (ev.window.event == SDL_WINDOWEVENT_CLOSE) {
+      u_int count;
+
+      for (count = 0; count < disp->num_roots; count++) {
+        if (disp->roots[count]->window_destroyed) {
+          (*disp->roots[count]->window_destroyed)(disp->roots[count]);
+        }
+      }
     }
 
     break;
@@ -1064,6 +1083,9 @@ static void poll_event(void) {
       if ((SDL_GetModState() & KMOD_SHIFT) && win->set_xdnd_config) {
         (*win->set_xdnd_config)(win, NULL, "scp", ev.drop.file);
       } else if (win->utf_selection_notified) {
+        if (prev_ev_type == SDL_DROPFILE) {
+          (*win->utf_selection_notified)(win, " ", 1, 0); /* separator */
+        }
         (*win->utf_selection_notified)(win, ev.drop.file, strlen(ev.drop.file), 1);
       }
 
@@ -1099,6 +1121,8 @@ static void poll_event(void) {
 
     break;
   }
+
+  prev_ev_type = ev.type;
 }
 
 /* --- global functions --- */
@@ -1129,60 +1153,65 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
   displays[num_displays] = disp;
 
   if (num_displays == 0) {
-    /* Callback should be set before bl_dialog() is called. */
-    bl_dialog_set_callback(dialog_cb);
-
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-      return NULL;
-    }
-
-#ifdef USE_SDL2_KMSDRM
-    /* Check SDL Video driver */
-    if (strcmp(SDL_GetCurrentVideoDriver(), "KMSDRM") == 0) {
-      /* Set resolution value*/
-      if (kmsdrm_xres == -1 || kmsdrm_yres == -1) {
-        /* Get framebuffer resolution */
-        dev = getenv("FRAMEBUFFER");
-        dev = dev ? dev : "/dev/fb0";
-        fb_fd = open(dev, O_RDWR);
-        if (fb_fd < 0) {
-          bl_error_printf("Couldn't open %s.\n", dev);
-          return 0;
-        }
-        ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
-        close(fb_fd);
-        fb_xres = vinfo.xres;
-        fb_yres = vinfo.yres;
-      }
-      else {
-        fb_xres = kmsdrm_xres;
-        fb_yres = kmsdrm_yres;
-      }
-    }
+#ifdef MONITOR_PTY
+    if (thread_counter == 0) {
+      SDL_Thread *thrd;
 #endif
 
-    SDL_StartTextInput();
+      /* Callback should be set before bl_dialog() is called. */
+      bl_dialog_set_callback(dialog_cb);
 
-    pty_event_type = SDL_RegisterEvents(1);
+      if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        return NULL;
+      }
+#ifdef USE_SDL2_KMSDRM
+      /* Check SDL Video driver */
+      if (strcmp(SDL_GetCurrentVideoDriver(), "KMSDRM") == 0) {
+        /* Set resolution value*/
+        if (kmsdrm_xres == -1 || kmsdrm_yres == -1) {
+          /* Get framebuffer resolution */
+          dev = getenv("FRAMEBUFFER");
+          dev = dev ? dev : "/dev/fb0";
+          fb_fd = open(dev, O_RDWR);
+          if (fb_fd < 0) {
+            bl_error_printf("Couldn't open %s.\n", dev);
+            return 0;
+          }
+          ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
+          close(fb_fd);
+          fb_xres = vinfo.xres;
+          fb_yres = vinfo.yres;
+        }
+        else {
+          fb_xres = kmsdrm_xres;
+          fb_yres = kmsdrm_yres;
+        }
+      }
+#endif
 
-    main_tid = SDL_GetThreadID(NULL);
+      SDL_StartTextInput();
 
-    SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+      pty_event_type = SDL_RegisterEvents(1);
 
-    num_displays = 1;
+      main_tid = SDL_GetThreadID(NULL);
+
+      SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+
+      num_displays = 1;
 
 #ifdef MONITOR_PTY
-    {
-      SDL_Thread *thrd;
-
       pty_cond = SDL_CreateCond();
       mutex = SDL_CreateMutex();
+      thread_counter++; /* XXX should be enclosed by mutexlock */
       thrd = SDL_CreateThread(monitor_ptys, "pty_thread", NULL);
       SDL_DetachThread(thrd);
+    } else {
+      num_displays = 1;
+      thread_counter++;
     }
 #endif
   } else {
-    num_displays ++;
+    num_displays++;
   }
 
   disp->name = strdup(disp_name);
@@ -1209,13 +1238,28 @@ void ui_display_close(ui_display_t *disp) {
         cur_preedit_text = NULL;
 
 #ifdef MONITOR_PTY
-        SDL_LockMutex(mutex);
-        SDL_CondSignal(pty_cond);
-        SDL_UnlockMutex(mutex);
-        SDL_DestroyMutex(mutex);
-        SDL_DestroyCond(pty_cond);
+        thread_counter--; /* XXX should be enclosed by mutexlock */
+
+        if (processing_pty_event) {
+          processing_pty_event = 0;
+          SDL_LockMutex(mutex);
+          /*
+           * If vt_get_all_terms() returns 1 or greater value, monitor_ptys() thread
+           * does not exit even if SDL_CondSignal() is called here.
+           */
+          SDL_CondSignal(pty_cond);
+          SDL_UnlockMutex(mutex);
+        }
+
+        if (thread_counter == 0) {
+          SDL_DestroyMutex(mutex);
+          SDL_DestroyCond(pty_cond);
 #endif
-        SDL_Quit();
+          SDL_Quit();
+#ifdef MONITOR_PTY
+        }
+#endif
+        /* monitor_ptys() thread can be alive. It is killed after main() returns. */
       } else {
         displays[count] = displays[num_displays];
       }
@@ -1236,7 +1280,9 @@ void ui_display_close_all(void) {
 }
 
 ui_display_t **ui_get_opened_displays(u_int *num) {
-  poll_event();
+  if (num_displays > 0) { /* check for daeamon mode */
+    poll_event();
+  }
 
   *num = 0;
 
