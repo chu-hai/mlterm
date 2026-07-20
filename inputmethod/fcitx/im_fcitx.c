@@ -50,7 +50,11 @@
 #define FCITX_RELEASE_KEY (1)
 
 /* See fcitx-utils/capabilityflags.h */
+#if 0
 #define CAPACITY_CLIENT_SIDE_UI (1 << 0) /* (1ull << 39) */
+#else
+#define CAPACITY_CLIENT_SIDE_UI (1ull << 39)
+#endif
 #define CAPACITY_PREEDIT (1 << 1)
 #define CAPACITY_CLIENT_SIDE_CONTROL_STATE (1 << 2)
 #define CAPACITY_FORMATTED_PREEDIT (1 << 4)
