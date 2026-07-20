@@ -83,6 +83,9 @@ void fcitx_client_close_ic(FcitxClient *self);
 /* When fcitx encoding is the same as terminal, conv is NULL. */
 #define NEED_TO_CONV(fcitx) ((fcitx)->conv)
 
+#ifdef USE_FCITX5
+#define CONNECT_TIMEOUT_MS 3000
+#endif
 typedef struct im_fcitx {
   /* input method common object */
   ui_im_t im;
@@ -104,6 +107,9 @@ typedef struct im_fcitx {
 
   XKeyEvent prev_key;
 
+#ifdef USE_FCITX5
+  gboolean is_connected;
+#endif
 } im_fcitx_t;
 
 /* --- static variables --- */
@@ -400,6 +406,7 @@ static void connected(FcitxClient *client, void *data) {
                             );
   fcitx_client_focus_in(client);
 
+#ifndef USE_FCITX5
 #if 1
   /*
    * XXX
@@ -412,6 +419,11 @@ static void connected(FcitxClient *client, void *data) {
     line_height = (*fcitx->im.listener->get_line_height)(fcitx->im.listener->self);
     fcitx_client_set_cursor_rect(fcitx->client, x, y - line_height, 0, line_height);
   }
+#endif
+#endif
+
+#ifdef USE_FCITX5
+  fcitx->is_connected = TRUE;
 #endif
 }
 
@@ -1048,8 +1060,27 @@ ui_im_t *im_fcitx_new(u_int64_t magic, vt_char_encoding_t term_encoding,
 #endif
 
 #ifdef USE_FCITX5
+#if 0
   /* I don't know why, but connected() is not called without this. */
   usleep(100000);
+#endif
+  /* Wait for connection */
+  gint64 deadline = g_get_monotonic_time() + (gint64)CONNECT_TIMEOUT_MS * G_TIME_SPAN_MILLISECOND;
+  while (!fcitx->is_connected) {
+    while (g_main_context_pending(NULL)) {
+      g_main_context_iteration(NULL, FALSE);
+    }
+
+    if (fcitx->is_connected) {
+      break;
+    }
+
+    if (g_get_monotonic_time() >= deadline) {
+        bl_error_printf("Failed to connect to fcitx5 server: Connection timed out.\n");
+        goto error;
+    }
+    usleep(1000);
+}
 #endif
 
   return (ui_im_t*)fcitx;
