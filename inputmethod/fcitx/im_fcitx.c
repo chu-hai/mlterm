@@ -89,6 +89,7 @@ void fcitx_client_close_ic(FcitxClient *self);
 
 #ifdef USE_FCITX5
 #define CONNECT_TIMEOUT_MS 3000
+#define DISABLED_IM_NAME "keyboard-"
 #endif
 typedef struct im_fcitx {
   /* input method common object */
@@ -300,7 +301,9 @@ static int key_event(ui_im_t *im, u_char key_char, KeySym ksym, XKeyEvent *event
                  event->time
 #endif
                  )) {
+#ifndef USE_FCITX5
     fcitx->is_enabled = TRUE;
+#endif
     event->state = state;
     memcpy(&fcitx->prev_key, event, sizeof(XKeyEvent));
 
@@ -308,7 +311,9 @@ static int key_event(ui_im_t *im, u_char key_char, KeySym ksym, XKeyEvent *event
 
     return 0;
   } else {
+#ifndef USE_FCITX5
     fcitx->is_enabled = FALSE;
+#endif
 
     if (fcitx->im.preedit.filled_len > 0) {
       g_main_context_iteration(g_main_context_default(), FALSE);
@@ -318,6 +323,7 @@ static int key_event(ui_im_t *im, u_char key_char, KeySym ksym, XKeyEvent *event
   return 1;
 }
 
+#ifndef USE_FCITX5
 static int switch_mode(ui_im_t *im) {
   im_fcitx_t *fcitx;
 
@@ -333,6 +339,9 @@ static int switch_mode(ui_im_t *im) {
 
   return 1;
 }
+#else
+static int switch_mode(ui_im_t *im) { return 1; }
+#endif
 
 static int is_active(ui_im_t *im) { return ((im_fcitx_t*)im)->is_enabled; }
 
@@ -937,6 +946,19 @@ static void update_client_side_ui(FcitxClient *client, char *auxup, char *auxdow
 #endif
 #endif
 
+#ifdef USE_FCITX5
+static void current_im(FcitxClient *client, char *name, char *unique_name, char *lang_code,
+                       void *data) {
+
+  im_fcitx_t *fcitx = (im_fcitx_t*)data;
+
+  if (strncmp(unique_name, DISABLED_IM_NAME, strlen(DISABLED_IM_NAME)) == 0) {
+    fcitx->is_enabled = FALSE;
+  } else {
+    fcitx->is_enabled = TRUE;
+  }
+}
+#endif
 
 /* --- global functions --- */
 
@@ -1018,6 +1040,8 @@ ui_im_t *im_fcitx_new(u_int64_t magic, vt_char_encoding_t term_encoding,
   g_signal_connect(fcitx->client, "update-client-side-ui", G_CALLBACK(update_client_side_ui),
                    fcitx);
 #ifdef USE_FCITX5
+  g_signal_connect(fcitx->client, "current-im", G_CALLBACK(current_im), fcitx);
+
   /* XXX I don't know why, but 'data' argument of update_client_side_ui() gets NULL. */
   g_object_set_data(G_OBJECT(fcitx->client), "fcitx", fcitx);
 #endif
