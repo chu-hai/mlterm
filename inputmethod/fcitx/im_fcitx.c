@@ -691,24 +691,26 @@ static void update_formatted_preedit(FcitxClient *client, GPtrArray *list, int c
       }
     }
 
-    fcitx->im.preedit.cursor_offset = num_chars = 0;
+    fcitx->im.preedit.cursor_offset = fcitx->im.preedit.segment_offset = num_chars = 0;
 
+    size_t str_len_total = 0;
     for (count = 0; count < list->len; count++) {
       size_t str_len;
 
       item = g_ptr_array_index(list, count);
 
       str_len = strlen(item->string);
-
-      if (cursor_pos >= 0 && (cursor_pos -= str_len) < 0) {
-        fcitx->im.preedit.cursor_offset = num_chars;
-      }
+      str_len_total += str_len;
 
       (*parser_utf8->init)(parser_utf8);
       (*parser_utf8->set_str)(parser_utf8, (u_char*)item->string, str_len);
 
       while ((*parser_utf8->next_char)(parser_utf8, &ch)) {
         num_chars++;
+        if (cursor_pos >= 0 && cursor_pos == (str_len_total - parser_utf8->left)) {
+          fcitx->im.preedit.cursor_offset = num_chars;
+          fcitx->im.preedit.segment_offset = num_chars;
+        }
       }
     }
 
