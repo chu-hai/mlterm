@@ -28,6 +28,23 @@ char *strcasestr(const char *haystack, const char *needle);
 #define input_event_usec time.tv_usec
 #endif
 
+#ifdef USE_KMSDRM_DIRTY_REGION
+#define FB_FULL_TRANS_THRESHOLD 80
+
+typedef struct {
+  bool is_valid;
+  int x;
+  int y;
+  int width;
+  int height;
+} fb_rect_t;
+
+typedef struct {
+  fb_rect_t dirty_rect[2];  /* dirty rect for dumb buffers */
+  fb_rect_t pending_rect;   /* Unapplied rect area for dirty rects */
+} fb_dirty_region_t;
+#endif
+
 /* --- static variables --- */
 
 static int console_id = -1;
@@ -39,7 +56,54 @@ static struct kbdiacrsuc *diacrs_uc;
 static struct kbdiacrs *diacrs;
 #endif
 
+#ifdef USE_KMSDRM_DIRTY_REGION
+static fb_dirty_region_t dirty_region;
+static u_int fb_total_pixels;
+#endif
+
 /* --- static functions --- */
+
+#ifdef USE_KMSDRM_DIRTY_REGION
+static inline u_char* get_dumb_fb(int page, int x, int y) {
+  return _display.drm_dumb[page].fb + (y * _display.line_length) + (x * _display.bytes_per_pixel);
+}
+
+static inline void clear_fb_rect(fb_rect_t *rect) {
+  rect->is_valid = false;
+  rect->x = 0;
+  rect->y = 0;
+  rect->width = 0;
+  rect->height = 0;
+}
+
+static inline void merge_fb_rect(fb_rect_t *rect, int x, int y, int width, int height) {
+  /*
+   * XXX: Need range check?
+   */
+  if (!rect->is_valid) {
+    rect->x = x;
+    rect->y = y;
+    rect->width = width;
+    rect->height = height;
+  } else {
+    const int cur_right  = rect->x + rect->width;
+    const int cur_bottom = rect->y + rect->height;
+    const int new_right  = x + width;
+    const int new_bottom = y + height;
+
+    const int left   = (rect->x < x) ? rect->x : x;
+    const int top    = (rect->y < y) ? rect->y : y;
+    const int right  = (cur_right  > new_right)  ? cur_right  : new_right;
+    const int bottom = (cur_bottom > new_bottom) ? cur_bottom : new_bottom;
+
+    rect->x = left;
+    rect->y = top;
+    rect->width  = right  - left;
+    rect->height = bottom - top;
+  }
+  rect->is_valid = true;
+}
+#endif /* USE_KMSDRM_DIRTY_REGION */
 
 static int get_key_state(void) {
   int ret;
@@ -442,7 +506,47 @@ static int waiting_for_flip;
 static void page_flip(void) {
   static int flip;
 
+#ifdef USE_KMSDRM_DIRTY_REGION
+  fb_rect_t *target_rect;
+  fb_rect_t *pending_rect = &dirty_region.pending_rect;
+
+  /* XXX Report an error if dirty_region.pending_rect is invalid (this should never happen) */
+  if (!pending_rect->is_valid) {
+    bl_debug_printf("page_flip() : pending_rect->is_valid is false\n");
+    _display.drm_damaged = 0;
+    return;
+  }
+
+  /* Apply pending_rect */
+  merge_fb_rect(&dirty_region.dirty_rect[0], pending_rect->x, pending_rect->y, pending_rect->width, pending_rect->height);
+  merge_fb_rect(&dirty_region.dirty_rect[1], pending_rect->x, pending_rect->y, pending_rect->width, pending_rect->height);
+  clear_fb_rect(pending_rect);
+
+  target_rect = &dirty_region.dirty_rect[flip];
+
+  /* Choose transfer method based on dirty ratio */
+  if (((uint64_t)target_rect->width * target_rect->height * 100) / fb_total_pixels >= FB_FULL_TRANS_THRESHOLD) {
+    /* Transfer full screen if area ratio exceeds threshold */
+    memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
+  } else if ((target_rect->width * 100) / _display.width >= FB_FULL_TRANS_THRESHOLD) {
+    /* Transfer full width if rect width exceeds threshold */
+    memcpy(get_dumb_fb(flip, 0, target_rect->y), get_fb(0, target_rect->y), target_rect->height * _display.line_length);
+  } else {
+    /* Otherwise, transfer dirty rect */
+    char *fb = get_fb(target_rect->x, target_rect->y);
+    char *dumb_fb = get_dumb_fb(flip, target_rect->x, target_rect->y);
+    for (int y = 0; y < target_rect->height; y++) {
+      memcpy(dumb_fb, fb, target_rect->width * _display.bytes_per_pixel);
+      fb += _display.line_length;
+      dumb_fb += _display.line_length;
+    }
+  }
+
+  /* Clear transferred dirty rect */
+  clear_fb_rect(target_rect);
+#else
   memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
+#endif
   drmModePageFlip(_display.fb_fd, _display.drm_resource->crtcs[0] /* crtc_id */,
                   _display.drm_dumb[flip].fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
   waiting_for_flip = 1;
@@ -590,6 +694,15 @@ static int open_kmsdrm(char *dev) {
   _display.bytes_per_pixel = 4;
 
   ui_event_source_add_fd(_display.fb_fd, process_drm_event);
+
+#ifdef USE_KMSDRM_DIRTY_REGION
+  fb_total_pixels = _display.width * _display.height;
+
+  clear_fb_rect(&dirty_region.dirty_rect[0]);
+  clear_fb_rect(&dirty_region.dirty_rect[1]);
+  clear_fb_rect(&dirty_region.pending_rect);
+  merge_fb_rect(&dirty_region.pending_rect, 0, 0, _display.width, _display.height);
+#endif
 
   return 1;
 
@@ -1168,3 +1281,21 @@ static int receive_key_event(int fd) {
 
   return 1;
 }
+
+#ifdef USE_KMSDRM_DIRTY_REGION
+/* --- global functions --- */
+
+/*
+ * NOTE: Marks a region of the framebuffer as dirty.
+ *       This function is called by the following functions.
+ *
+ *       restore_hidden_region()
+ *       draw_mouse_cursor()
+ *       ui_display_put_image2()
+ *       ui_display_fill_with()
+ *       ui_display_copy_lines2()
+ */
+void mark_fb_dirty_region(int x, int y, int width, int height) {
+  merge_fb_rect(&dirty_region.pending_rect, x, y ,width, height);
+}
+#endif

@@ -683,6 +683,9 @@ static void restore_hidden_region(void) {
         fb += _display.line_length;
       }
     }
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+    mark_fb_dirty_region(_mouse.cursor.x, _mouse.cursor.y, _mouse.cursor.width, _mouse.cursor.height);
+#endif
   } else {
     ui_window_t *win;
     int cursor_x;
@@ -841,6 +844,9 @@ static void draw_mouse_cursor(void) {
   for (y = 0; y < _mouse.cursor.height; y++) {
     draw_mouse_cursor_line(y);
   }
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+  mark_fb_dirty_region(_mouse.cursor.x, _mouse.cursor.y, _mouse.cursor.width, _mouse.cursor.height);
+#endif
 
   _mouse.cursor.is_drawn = 1;
 }
@@ -1906,6 +1912,9 @@ void ui_display_put_image2(int x, int y, u_char *image, size_t size, int need_fb
     put_image_124bpp(x, y, image, size, 1, need_fb_pixel);
   } else if (!rotate_display) {
     memcpy(get_fb(x, y), image, size);
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+    mark_fb_dirty_region(x, y, size / 4, 1);
+#endif
   } else {
     /* Display is rotated. */
 
@@ -1945,6 +1954,9 @@ void ui_display_put_image2(int x, int y, u_char *image, size_t size, int need_fb
         *((u_int32_t*)fb) = ((u_int32_t*)image)[count];
         fb += line_length;
       }
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+      mark_fb_dirty_region(y, x, 1, size / 4);
+#endif
     }
 
     if (rotate_display < 0) {
@@ -1969,6 +1981,9 @@ void ui_display_put_image2(int x, int y, u_char *image, size_t size, int need_fb
     if (x <= _mouse.cursor.x + _mouse.cursor.width && _mouse.cursor.x < x + size) {
       _mouse.hidden_region_saved = 0;
       draw_mouse_cursor_line(y - _mouse.cursor.y);
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+      mark_fb_dirty_region(_mouse.cursor.x, y - _mouse.cursor.y, _mouse.cursor.width, 1);
+#endif
     }
   }
 }
@@ -2155,6 +2170,9 @@ void ui_display_fill_with(int x, int y, u_int width, u_int height, u_int8_t pixe
       memcpy(fb, buf, width);
       fb += _display.line_length;
     }
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+    mark_fb_dirty_region(x, y, width, height);
+#endif
   }
 }
 
@@ -2281,6 +2299,9 @@ void ui_display_copy_lines2(int src_x, int src_y, int dst_x, int dst_y, u_int wi
       }
     }
   }
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+  mark_fb_dirty_region(dst_x, dst_y, width, height);
+#endif
 }
 
 /* XXX for input method window */

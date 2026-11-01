@@ -69,4 +69,9 @@ int x68k_tvram_is_enabled(void);
 int x68k_tvram_set_wall_picture(u_short *image, u_int width, u_int height);
 #endif
 
+/* Dirty region tracking functions for Linux libdrm */
+#if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
+void mark_fb_dirty_region(int x, int y, int width, int height);
+#endif
+
 #endif
