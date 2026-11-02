@@ -30,6 +30,9 @@ char *strcasestr(const char *haystack, const char *needle);
 
 #ifdef USE_KMSDRM_DIRTY_REGION
 #define FB_FULL_TRANS_THRESHOLD 80
+#if 0
+#define TEST_DRAW_DIRTY_RECT
+#endif
 
 typedef struct {
   bool is_valid;
@@ -103,6 +106,41 @@ static inline void merge_fb_rect(fb_rect_t *rect, int x, int y, int width, int h
   }
   rect->is_valid = true;
 }
+#ifdef TEST_DRAW_DIRTY_RECT
+static void draw_rect_outline(int page, int x, int y, int width, int height, uint32_t color) {
+  /* Argument range check */
+  if (x < 0 || y < 0 || width <= 0 || height <= 0) {
+    return;
+  }
+  if (x + width > _display.width || y + height > _display.height) {
+    return;
+  }
+
+  /* Start and End coordinates */
+  int sx = x;
+  int sy = y;
+  int ex = x + width  - 1;
+  int ey = y + height - 1;
+
+  /* Dumb buffer base address */
+  char *base_ptr = _display.drm_dumb[page].fb;
+
+  /* Draw top and bottom borders */
+  uint32_t *pixel_t = (uint32_t *)(base_ptr + sy * _display.line_length);
+  uint32_t *pixel_b = (uint32_t *)(base_ptr + ey * _display.line_length);
+  for (int px = sx; px <= ex; ++px) {
+    pixel_t[px] = color;
+    pixel_b[px] = color;
+  }
+
+  /* Draw left and right borders */
+  for (int py = sy; py <= ey; ++py) {
+    uint32_t *pixel = (uint32_t *)(base_ptr + py * _display.line_length);
+    pixel[sx] = color;
+    pixel[ex] = color;
+  }
+}
+#endif
 #endif /* USE_KMSDRM_DIRTY_REGION */
 
 static int get_key_state(void) {
@@ -528,9 +566,17 @@ static void page_flip(void) {
   if (((uint64_t)target_rect->width * target_rect->height * 100) / fb_total_pixels >= FB_FULL_TRANS_THRESHOLD) {
     /* Transfer full screen if area ratio exceeds threshold */
     memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
+#ifdef TEST_DRAW_DIRTY_RECT
+    memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
+    draw_rect_outline(flip, 0, 0, _display.width, _display.height,  0x00ff0000);
+#endif
   } else if ((target_rect->width * 100) / _display.width >= FB_FULL_TRANS_THRESHOLD) {
     /* Transfer full width if rect width exceeds threshold */
     memcpy(get_dumb_fb(flip, 0, target_rect->y), get_fb(0, target_rect->y), target_rect->height * _display.line_length);
+#ifdef TEST_DRAW_DIRTY_RECT
+    memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
+    draw_rect_outline(flip, 0, target_rect->y, _display.width, target_rect->height,  0x0000ff00);
+#endif
   } else {
     /* Otherwise, transfer dirty rect */
     char *fb = get_fb(target_rect->x, target_rect->y);
@@ -540,6 +586,10 @@ static void page_flip(void) {
       fb += _display.line_length;
       dumb_fb += _display.line_length;
     }
+#ifdef TEST_DRAW_DIRTY_RECT
+    memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
+    draw_rect_outline(flip, target_rect->x, target_rect->y, target_rect->width, target_rect->height,  0x00ff00ff);
+#endif
   }
 
   /* Clear transferred dirty rect */
