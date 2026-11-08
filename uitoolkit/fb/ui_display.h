@@ -74,4 +74,10 @@ int x68k_tvram_set_wall_picture(u_short *image, u_int width, u_int height);
 void mark_fb_dirty_region(int x, int y, int width, int height);
 #endif
 
+/* TEST: Quick-and-dirty profiler for Dirty region tracking */
+#if 0
+#define TEST_DIRTY_RECT_PROFILER
+#include "test_dirty_rect_profiler.h"
+#endif
+
 #endif

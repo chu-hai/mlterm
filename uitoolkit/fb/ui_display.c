@@ -686,6 +686,9 @@ static void restore_hidden_region(void) {
 #if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
     mark_fb_dirty_region(_mouse.cursor.x, _mouse.cursor.y, _mouse.cursor.width, _mouse.cursor.height);
 #endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+    dirty_rect_profiler_collect(ID_RESTORE_HIDDEN_REGION, 0);
+#endif
   } else {
     ui_window_t *win;
     int cursor_x;
@@ -846,6 +849,9 @@ static void draw_mouse_cursor(void) {
   }
 #if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
   mark_fb_dirty_region(_mouse.cursor.x, _mouse.cursor.y, _mouse.cursor.width, _mouse.cursor.height);
+#endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+  dirty_rect_profiler_collect(ID_DRAW_MOUSE_CURSOR, 0);
 #endif
 
   _mouse.cursor.is_drawn = 1;
@@ -1477,11 +1483,20 @@ ui_display_t *ui_display_open(char *disp_name, u_int depth) {
     /* Hide the cursor of default console. */
     write(STDIN_FILENO, "\x1b[?25l", 6);
   }
+#ifdef TEST_DIRTY_RECT_PROFILER
+  dirty_rect_profiler_open("mlterm/dirty_rect_profile.txt");
+  bl_debug_printf("Dirty region tracking profiler Enabled.\n");
+#else
+  bl_debug_printf("Dirty region tracking profiler Disabled.\n");
+#endif
 
   return &_disp;
 }
 
 void ui_display_close(ui_display_t *disp) {
+#ifdef TEST_DIRTY_RECT_PROFILER
+  dirty_rect_profiler_close();
+#endif
   if (disp == &_disp) {
     ui_display_close_all();
   }
@@ -1915,6 +1930,9 @@ void ui_display_put_image2(int x, int y, u_char *image, size_t size, int need_fb
 #if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
     mark_fb_dirty_region(x, y, size / 4, 1);
 #endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+    dirty_rect_profiler_collect(ID_UI_DISPLAY_PUT_IMAGE2, 0);
+#endif
   } else {
     /* Display is rotated. */
 
@@ -1957,6 +1975,9 @@ void ui_display_put_image2(int x, int y, u_char *image, size_t size, int need_fb
 #if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
       mark_fb_dirty_region(y, x, 1, size / 4);
 #endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+      dirty_rect_profiler_collect(ID_UI_DISPLAY_PUT_IMAGE2, 0);
+#endif
     }
 
     if (rotate_display < 0) {
@@ -1983,6 +2004,9 @@ void ui_display_put_image2(int x, int y, u_char *image, size_t size, int need_fb
       draw_mouse_cursor_line(y - _mouse.cursor.y);
 #if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
       mark_fb_dirty_region(_mouse.cursor.x, y - _mouse.cursor.y, _mouse.cursor.width, 1);
+#endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+      dirty_rect_profiler_collect(ID_UI_DISPLAY_PUT_IMAGE2, 0);
 #endif
     }
   }
@@ -2173,6 +2197,9 @@ void ui_display_fill_with(int x, int y, u_int width, u_int height, u_int8_t pixe
 #if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
     mark_fb_dirty_region(x, y, width, height);
 #endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+    dirty_rect_profiler_collect(ID_UI_DISPLAY_FILL_WITH, 0);
+#endif
   }
 }
 
@@ -2301,6 +2328,9 @@ void ui_display_copy_lines2(int src_x, int src_y, int dst_x, int dst_y, u_int wi
   }
 #if defined(USE_KMSDRM) && defined(__linux__) && defined(USE_KMSDRM_DIRTY_REGION)
   mark_fb_dirty_region(dst_x, dst_y, width, height);
+#endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+  dirty_rect_profiler_collect(ID_UI_DISPLAY_COPY_LINES2, 0);
 #endif
 }
 

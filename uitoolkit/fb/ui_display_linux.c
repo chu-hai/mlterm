@@ -570,12 +570,18 @@ static void page_flip(void) {
     memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
     draw_rect_outline(flip, 0, 0, _display.width, _display.height,  0x00ff0000);
 #endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+    dirty_rect_profiler_collect(ID_PAGE_FLIP_FULL, _display.smem_len);
+#endif
   } else if ((target_rect->width * 100) / _display.width >= FB_FULL_TRANS_THRESHOLD) {
     /* Transfer full width if rect width exceeds threshold */
     memcpy(get_dumb_fb(flip, 0, target_rect->y), get_fb(0, target_rect->y), target_rect->height * _display.line_length);
 #ifdef TEST_DRAW_DIRTY_RECT
     memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
     draw_rect_outline(flip, 0, target_rect->y, _display.width, target_rect->height,  0x0000ff00);
+#endif
+#ifdef TEST_DIRTY_RECT_PROFILER
+    dirty_rect_profiler_collect(ID_PAGE_FLIP_WIDTH, target_rect->height * _display.line_length);
 #endif
   } else {
     /* Otherwise, transfer dirty rect */
@@ -585,6 +591,9 @@ static void page_flip(void) {
       memcpy(dumb_fb, fb, target_rect->width * _display.bytes_per_pixel);
       fb += _display.line_length;
       dumb_fb += _display.line_length;
+#ifdef TEST_DIRTY_RECT_PROFILER
+      dirty_rect_profiler_collect(ID_PAGE_FLIP_RECT, target_rect->width * _display.bytes_per_pixel);
+#endif
     }
 #ifdef TEST_DRAW_DIRTY_RECT
     memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
@@ -596,6 +605,9 @@ static void page_flip(void) {
   clear_fb_rect(target_rect);
 #else
   memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
+#ifdef TEST_DIRTY_RECT_PROFILER
+  dirty_rect_profiler_collect(ID_PAGE_FLIP_FULL, _display.smem_len);
+#endif
 #endif
   drmModePageFlip(_display.fb_fd, _display.drm_resource->crtcs[0] /* crtc_id */,
                   _display.drm_dumb[flip].fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
