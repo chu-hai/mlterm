@@ -595,6 +595,9 @@ static void page_flip(void) {
       dirty_rect_profiler_collect(ID_PAGE_FLIP_RECT, target_rect->width * _display.bytes_per_pixel);
 #endif
     }
+#ifdef TEST_DIRTY_RECT_PROFILER
+    dirty_rect_profiler_collect(ID_PAGE_FLIP_RECT_COUNT, 0);
+#endif
 #ifdef TEST_DRAW_DIRTY_RECT
     memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
     draw_rect_outline(flip, target_rect->x, target_rect->y, target_rect->width, target_rect->height,  0x00ff00ff);

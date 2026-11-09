@@ -21,6 +21,7 @@ static const char *DRP_func_names[ID_DIRTY_RECT_FUNCTION_MAX] = {
   "page_flip(Full Width)",
   "page_flip(Dirty Rect)",
   "",
+  "",
   "restore_hidden_region",
   "draw_mouse_cursor_line",
   "ui_display_put_image2",
@@ -93,7 +94,7 @@ static void DRP_flush(void) {
               "",
               total_bytes,
               ((double)total_bytes / 1048576));
-    } else {
+    } else if (i != ID_PAGE_FLIP_RECT_COUNT){
       if (DRP_data.func_call_cnt[i] > 0) {
         fprintf(DRP_data.fp, "%19s %-22s %8lu\n",
                 "",
@@ -125,8 +126,8 @@ static void DRP_output_summary(void) {
   total_bytes = 0;
   total_flip_count = 0;
   for (int i = 0; i < ID_DIRTY_RECT_FUNCTION_MAX; i++) {
-    if (i <= ID_PAGE_FLIP_RECT) {
-      total_flip_count += DRP_summary.func_call_cnt[i];
+    if (i <= ID_PAGE_FLIP_RECT_COUNT) {
+      total_flip_count += (i != ID_PAGE_FLIP_RECT) ? DRP_summary.func_call_cnt[i] : 0;
       total_bytes += DRP_summary.trans_bytes[i];
       fprintf(DRP_data.fp, "%-19s %-22s %8lu %14lu (%7.3lfMiB)\n",
               (i == ID_PAGE_FLIP_FULL ? "Page flip summary" : ""),
