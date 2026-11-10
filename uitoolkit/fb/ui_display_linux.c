@@ -548,12 +548,21 @@ static void page_flip(void) {
   fb_rect_t *target_rect;
   fb_rect_t *pending_rect = &dirty_region.pending_rect;
 
-  /* XXX Report an error if dirty_region.pending_rect is invalid (this should never happen) */
   if (!pending_rect->is_valid) {
+#if 0
+    /* Log a debug message if dirty_region.pending_rect is invalid under specific conditions */
     bl_debug_printf("page_flip() : pending_rect->is_valid is false\n");
+#endif
+#if 1
+    /* Ignore page flip */
     _display.drm_damaged = 0;
     return;
+#else
+    /* Transfer the full screen region. */
+    merge_fb_rect(pending_rect, 0, 0, _display.width, _display.height);
+#endif
   }
+
 
   /* Apply pending_rect */
   merge_fb_rect(&dirty_region.dirty_rect[0], pending_rect->x, pending_rect->y, pending_rect->width, pending_rect->height);
