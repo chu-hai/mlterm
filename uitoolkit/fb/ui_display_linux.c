@@ -29,7 +29,9 @@ char *strcasestr(const char *haystack, const char *needle);
 #endif
 
 #ifdef USE_KMSDRM_DIRTY_REGION
-#define FB_FULL_TRANS_THRESHOLD 80
+#ifndef FB_FULL_TRANS_THRESHOLD
+#define FB_FULL_TRANS_THRESHOLD 80	/* Threshold for full (screen / width) transfer */
+#endif
 #if 0
 #define TEST_DRAW_DIRTY_RECT
 #endif
@@ -776,6 +778,9 @@ static int open_kmsdrm(char *dev) {
   clear_fb_rect(&dirty_region.dirty_rect[1]);
   clear_fb_rect(&dirty_region.pending_rect);
   merge_fb_rect(&dirty_region.pending_rect, 0, 0, _display.width, _display.height);
+
+  bl_msg_printf("Enabled Dirty region tracking.\n");
+  bl_msg_printf("Threshold for full (screen / width) transfer: %d%%\n", FB_FULL_TRANS_THRESHOLD);
 #endif
 
   return 1;
