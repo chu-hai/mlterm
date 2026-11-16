@@ -64,6 +64,7 @@ static struct kbdiacrs *diacrs;
 #ifdef USE_KMSDRM_DIRTY_REGION
 static fb_dirty_region_t dirty_region;
 static u_int fb_total_pixels;
+static u_int fb_full_trans_threshold = BL_MAX(0, BL_MIN(100, FB_FULL_TRANS_THRESHOLD));
 #endif
 
 /* --- static functions --- */
@@ -574,7 +575,7 @@ static void page_flip(void) {
   target_rect = &dirty_region.dirty_rect[flip];
 
   /* Choose transfer method based on dirty ratio */
-  if (((uint64_t)target_rect->width * target_rect->height * 100) / fb_total_pixels >= FB_FULL_TRANS_THRESHOLD) {
+  if (((uint64_t)target_rect->width * target_rect->height * 100) / fb_total_pixels >= fb_full_trans_threshold) {
     /* Transfer full screen if area ratio exceeds threshold */
     memcpy(_display.drm_dumb[flip].fb, _display.fb, _display.smem_len);
 #ifdef TEST_DRAW_DIRTY_RECT
@@ -584,7 +585,7 @@ static void page_flip(void) {
 #ifdef TEST_DIRTY_RECT_PROFILER
     dirty_rect_profiler_collect(ID_PAGE_FLIP_FULL, _display.smem_len);
 #endif
-  } else if ((target_rect->width * 100) / _display.width >= FB_FULL_TRANS_THRESHOLD) {
+  } else if ((target_rect->width * 100) / _display.width >= fb_full_trans_threshold) {
     /* Transfer full width if rect width exceeds threshold */
     memcpy(get_dumb_fb(flip, 0, target_rect->y), get_fb(0, target_rect->y), target_rect->height * _display.line_length);
 #ifdef TEST_DRAW_DIRTY_RECT
@@ -780,7 +781,7 @@ static int open_kmsdrm(char *dev) {
   merge_fb_rect(&dirty_region.pending_rect, 0, 0, _display.width, _display.height);
 
   bl_msg_printf("Enabled Dirty region tracking.\n");
-  bl_msg_printf("Threshold for full (screen / width) transfer: %d%%\n", FB_FULL_TRANS_THRESHOLD);
+  bl_msg_printf("Threshold for full (screen / width) transfer: %d%%\n", fb_full_trans_threshold);
 #endif
 
   return 1;
